@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.storage import Storage
 from utils.compliance import ComplianceTracker
 from utils.navigation import render_sidebar_nav
+from utils.ce_export import build_ce_zip
 
 render_sidebar_nav("Dashboard")
 st.title("📊 CE Tracking Dashboard")
@@ -166,6 +167,28 @@ if st.session_state.get("pmhc_helper_text"):
         value=st.session_state.pmhc_helper_text,
         height=220,
     )
+
+    if not ce_data.empty and "is_pmhc" in ce_data.columns:
+        pmhc_export_records = ce_data[ce_data["is_pmhc"].fillna(0).astype(bool)]
+    else:
+        pmhc_export_records = ce_data.iloc[0:0]
+
+    pmhc_zip, pmhc_record_count, pmhc_file_count = build_ce_zip(
+        pmhc_export_records,
+        folder_per_record=True,
+    )
+    st.download_button(
+        "Download PMH-C ZIP Packet",
+        data=pmhc_zip,
+        file_name="pmhc_ce_packet.zip",
+        mime="application/zip",
+        disabled=pmhc_record_count == 0,
+        use_container_width=True,
+    )
+    if pmhc_record_count:
+        st.caption(f"Includes {pmhc_record_count} PMH-C event folders and {pmhc_file_count} attached files.")
+    else:
+        st.caption("No PMH-C-tagged records available for ZIP export.")
 else:
     st.caption("Generate copy-ready text for PMH-C course submission details.")
 

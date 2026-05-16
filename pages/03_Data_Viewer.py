@@ -6,74 +6,13 @@ import streamlit as st
 from pathlib import Path
 import sys
 import pandas as pd
-from io import BytesIO
-from zipfile import ZipFile, ZIP_DEFLATED
-import re
-import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
 from utils.navigation import render_sidebar_nav
 from utils.storage import CATEGORY_LABELS
-
-
-def safe_filename(value: str) -> str:
-    """Create a readable filename segment for certificate exports."""
-    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value)).strip("_")
-    return cleaned or "certificate"
-
-
-def build_certificate_zip(records: pd.DataFrame) -> tuple[bytes, int]:
-    """Build a ZIP containing certificate files attached to selected records."""
-    buffer = BytesIO()
-    files_added = 0
-
-    with ZipFile(buffer, "w", ZIP_DEFLATED) as zip_file:
-        for _, record in records.iterrows():
-            certificate_path = record.get("certificate_path", "")
-            if not certificate_path:
-                continue
-
-            path = Path(certificate_path)
-            if not path.exists():
-                continue
-
-            date_part = safe_filename(record.get("date", "undated"))
-            title_part = safe_filename(record.get("title", "certificate"))
-            archive_name = f"{date_part}_{title_part}_{path.name}"
-            zip_file.write(path, archive_name)
-            files_added += 1
-
-    return buffer.getvalue(), files_added
-
-
-def attachment_filename(certificate_path: str) -> str:
-    """Return the original uploaded filename when metadata is available."""
-    if not certificate_path:
-        return ""
-
-    path = Path(certificate_path)
-    metadata_path = Path("certificates/metadata") / f"{path.stem}.json"
-
-    if metadata_path.exists():
-        try:
-            with open(metadata_path, "r") as f:
-                metadata = json.load(f)
-            return metadata.get("original_filename") or path.name
-        except Exception:
-            return path.name
-
-    return path.name
-
-
-def has_attachment(certificate_path: str) -> bool:
-    """Check whether a record points to an existing attachment file."""
-    if not certificate_path:
-        return False
-
-    path = Path(certificate_path)
-    return path.exists() or (Path("certificates/root") / path.name).exists()
+from utils.ce_export import attachment_filename, build_ce_zip, has_attachment
 
 render_sidebar_nav("Data Viewer")
 st.title("🔍 Data Viewer")
@@ -230,17 +169,17 @@ else:
 
     with col3:
         selected_records = filtered[filtered["id"].isin(selected_ids)] if selected_ids else pd.DataFrame()
-        zip_data, file_count = build_certificate_zip(selected_records) if selected_ids else (b"", 0)
+        zip_data, record_count, file_count = build_ce_zip(selected_records) if selected_ids else (b"", 0, 0)
         st.download_button(
-            "📎 Download Files",
+            "📎 Download CE Packet",
             data=zip_data,
-            file_name="ce_certificates.zip",
+            file_name="ce_export.zip",
             mime="application/zip",
-            disabled=file_count == 0,
+            disabled=record_count == 0,
             use_container_width=True,
         )
         if selected_ids and file_count == 0:
-            st.caption("No attached files for selected rows.")
+            st.caption("Packet will include details text; no attached files found.")
 
     with col4:
         if st.button("📄 Export to CSV", use_container_width=True):
