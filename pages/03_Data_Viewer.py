@@ -83,22 +83,75 @@ else:
     st.subheader(f"Records: {len(filtered)}")
     
     if not filtered.empty:
-        display_df = filtered[["date", "title", "category", "hours"]].copy()
+        display_df = filtered[["id", "date", "title", "category", "hours"]].copy()
+        display_df.insert(0, "selected", False)
         display_df["date"] = pd.to_datetime(display_df["date"]).dt.strftime("%Y-%m-%d")
-        
-        st.dataframe(
+
+        edited_df = st.data_editor(
             display_df,
             use_container_width=True,
             hide_index=True,
+            disabled=["date", "title", "category", "hours"],
+            column_config={
+                "selected": st.column_config.CheckboxColumn("Select"),
+                "id": None,
+                "date": "Date",
+                "title": "Title",
+                "category": "Categories",
+                "hours": "Hours",
+            },
+            key="record_selection_table",
         )
+
+        selected_ids = edited_df.loc[edited_df["selected"], "id"].tolist()
+        if len(selected_ids) > 1:
+            st.warning("Select one row at a time before editing or deleting.")
     else:
+        selected_ids = []
         st.info("No records match the selected filters.")
-    
+
+    if st.session_state.get("pending_delete_id"):
+        pending_id = st.session_state.pending_delete_id
+        pending_match = ce_data[ce_data["id"] == pending_id]
+        pending_title = (
+            pending_match.iloc[0].get("title", "selected entry")
+            if not pending_match.empty
+            else "selected entry"
+        )
+
+        st.warning(f"Confirm deletion of: {pending_title}")
+        confirm_delete = st.checkbox("Yes, permanently delete this CE entry")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if st.button("Confirm Delete", type="primary", disabled=not confirm_delete, use_container_width=True):
+                if storage.delete_record(pending_id):
+                    st.session_state.pop("pending_delete_id", None)
+                    st.success("Entry deleted")
+                    st.rerun()
+                else:
+                    st.error("Failed to delete entry")
+
+        with col2:
+            if st.button("Cancel", use_container_width=True):
+                st.session_state.pop("pending_delete_id", None)
+                st.rerun()
+
     # Actions
     st.markdown("---")
-    col1, col2 = st.columns(2)
-    
+    col1, col2, col3, col4 = st.columns(4)
+
     with col1:
+        if st.button("✏️ Edit Selected", disabled=len(selected_ids) != 1, use_container_width=True):
+            st.session_state.edit_record_id = selected_ids[0]
+            st.switch_page("pages/04_Edit_Entry.py")
+
+    with col2:
+        if st.button("🗑️ Delete Selected", disabled=len(selected_ids) != 1, use_container_width=True):
+            st.session_state.pending_delete_id = selected_ids[0]
+            st.rerun()
+
+    with col3:
         if st.button("📄 Export to CSV", use_container_width=True):
             csv = filtered.to_csv(index=False)
             st.download_button(
@@ -107,7 +160,7 @@ else:
                 file_name="ce_records.csv",
                 mime="text/csv"
             )
-    
-    with col2:
+
+    with col4:
         if st.button("🔄 Refresh", use_container_width=True):
             st.rerun()

@@ -45,18 +45,24 @@ else:
         pd.to_datetime(ce_data_copy["date"]).dt.strftime("%Y-%m-%d") + " - " + 
         ce_data_copy.get("title", "Untitled")
     )
+    record_ids = ce_data_copy["id"].tolist()
+    label_by_id = dict(zip(ce_data_copy["id"], ce_data_copy["label"]))
+    preselected_id = st.session_state.get("edit_record_id")
+    selected_index = record_ids.index(preselected_id) if preselected_id in record_ids else None
     
-    selected_label = st.selectbox(
+    selected_id = st.selectbox(
         "Select entry to edit",
-        options=ce_data_copy["label"],
-        index=None,
+        options=record_ids,
+        index=selected_index,
+        format_func=lambda record_id: label_by_id.get(record_id, record_id),
         placeholder="Choose an entry..."
     )
     
-    if selected_label:
+    if selected_id:
         # Find the selected entry
-        idx = ce_data_copy[ce_data_copy["label"] == selected_label].index[0]
+        idx = ce_data_copy[ce_data_copy["id"] == selected_id].index[0]
         entry = ce_data.loc[idx].to_dict()
+        st.session_state.edit_record_id = selected_id
         
         st.markdown("---")
         
