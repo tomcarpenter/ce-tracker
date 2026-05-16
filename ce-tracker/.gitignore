@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Streamlit
+.streamlit/
+*.streamlit.cache/
+
+# Data (gitignore actual records, keep structure)
+data/ce_records.parquet
+data/ce_records.csv
+data/audit_log.csv
+
+# Certificates (user data)
+certificates/root/*
+certificates/backup/*
+certificates/metadata/*
+
+# Backups
+backup_csv/*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Pytest
+.pytest_cache/
+.coverage
+
+# Temp files
+*.tmp
+*.bak
