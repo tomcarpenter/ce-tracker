@@ -13,6 +13,7 @@ import subprocess
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
+from utils.compliance import ComplianceTracker
 from utils.navigation import render_sidebar_nav
 
 render_sidebar_nav("Settings")
@@ -28,16 +29,22 @@ settings_file = Path("data/settings.json")
 
 # Load existing settings
 def load_settings():
-    if settings_file.exists():
-        with open(settings_file, "r") as f:
-            return json.load(f)
-    return {
+    defaults = {
         "lmhc_start": "2023-01-01",
         "suicide_start": "2020-01-01",
         "equity_start": "2022-01-01",
         "pmhc_start": "2023-01-01",
         "data_backup_path": "backup_data",
+        "requirements": ComplianceTracker.DEFAULT_REQUIREMENTS,
     }
+
+    if settings_file.exists():
+        with open(settings_file, "r") as f:
+            loaded = json.load(f)
+        defaults.update(loaded)
+        defaults["requirements"] = ComplianceTracker.DEFAULT_REQUIREMENTS | loaded.get("requirements", {})
+
+    return defaults
 
 def save_settings(settings):
     with open(settings_file, "w") as f:
@@ -111,6 +118,61 @@ with col2:
 
 st.markdown("---")
 
+st.subheader("Required CE Credits")
+requirements = settings["requirements"]
+
+col1, col2, col3 = st.columns(3)
+
+with col1:
+    lmhc_required = st.number_input(
+        "LMHC General Required",
+        min_value=0.0,
+        max_value=200.0,
+        step=0.5,
+        value=float(requirements["LMHC"]),
+    )
+    ethics_required = st.number_input(
+        "Ethics Required",
+        min_value=0.0,
+        max_value=200.0,
+        step=0.5,
+        value=float(requirements["Ethics"]),
+    )
+
+with col2:
+    roles_required = st.number_input(
+        "Roles Required",
+        min_value=0.0,
+        max_value=200.0,
+        step=0.5,
+        value=float(requirements["Roles"]),
+    )
+    suicide_required = st.number_input(
+        "Suicide Prevention Required",
+        min_value=0.0,
+        max_value=200.0,
+        step=0.5,
+        value=float(requirements["Suicide"]),
+    )
+
+with col3:
+    equity_required = st.number_input(
+        "Equity Required",
+        min_value=0.0,
+        max_value=200.0,
+        step=0.5,
+        value=float(requirements["Equity"]),
+    )
+    pmhc_required = st.number_input(
+        "PMH-C Required",
+        min_value=0.0,
+        max_value=200.0,
+        step=0.5,
+        value=float(requirements["PMH-C"]),
+    )
+
+st.markdown("---")
+
 # Backup locations
 st.subheader("Backup Configuration")
 
@@ -118,6 +180,9 @@ if "data_backup_path" not in st.session_state:
     st.session_state.data_backup_path = (
         settings.get("data_backup_path") or settings.get("csv_backup_path", "backup_data")
     )
+
+if st.session_state.get("selected_backup_folder"):
+    st.session_state.data_backup_path = st.session_state.pop("selected_backup_folder")
 
 col1, col2 = st.columns([3, 1])
 
@@ -134,7 +199,7 @@ with col2:
     if st.button("Browse...", use_container_width=True):
         selected_folder = choose_backup_folder()
         if selected_folder:
-            st.session_state.data_backup_path = selected_folder
+            st.session_state.selected_backup_folder = selected_folder
             st.rerun()
 
 st.caption("Backup is automatic after submissions, edits, and deletes. The folder contains ce_records.parquet plus an events folder with one subfolder per CE event.")
@@ -175,6 +240,14 @@ if st.button("💾 Save All Settings", type="primary", use_container_width=True)
         "equity_start": str(equity_start),
         "pmhc_start": str(pmhc_start),
         "data_backup_path": data_backup_path,
+        "requirements": {
+            "LMHC": lmhc_required,
+            "Ethics": ethics_required,
+            "Roles": roles_required,
+            "Suicide": suicide_required,
+            "Equity": equity_required,
+            "PMH-C": pmhc_required,
+        },
     }
     save_settings(new_settings)
     st.session_state.storage = Storage(backup_dir=data_backup_path)
