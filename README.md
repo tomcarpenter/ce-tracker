@@ -58,6 +58,7 @@ ce_tracker/
 │   ├── hashing.py              # SHA256 verification
 │   ├── sync.py                 # File mirroring
 │   └── file_manager.py         # Certificate storage
+├── tests/                      # Regression tests for exports/backups
 ├── data/
 │   ├── ce_records.parquet      # Primary storage
 │   └── audit_log.csv           # Append-only log

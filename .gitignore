@@ -37,7 +37,6 @@ certificates/backup/*
 certificates/metadata/*
 
 # Backups
-backup_csv/*
 backup_data/*
 
 # OS

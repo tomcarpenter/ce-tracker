@@ -7,6 +7,8 @@ from pathlib import Path
 import sys
 from datetime import datetime
 import json
+import platform
+import subprocess
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -46,6 +48,28 @@ settings = load_settings()
 
 def choose_backup_folder() -> str | None:
     """Open a local folder picker for the backup destination."""
+    if platform.system() == "Darwin":
+        script = (
+            'POSIX path of (choose folder with prompt '
+            '"Choose CE Tracker backup folder")'
+        )
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+
+            if result.returncode == 0:
+                return result.stdout.strip() or None
+
+            if result.stderr and "User canceled" not in result.stderr:
+                st.warning(f"Folder picker unavailable: {result.stderr.strip()}")
+            return None
+        except Exception as exc:
+            st.warning(f"macOS folder picker unavailable: {exc}")
+
     try:
         import tkinter as tk
         from tkinter import filedialog
