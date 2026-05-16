@@ -7,6 +7,17 @@ from utils.storage import Storage
 
 
 class StorageBackupTests(unittest.TestCase):
+    def test_initialize_creates_empty_backup_structure(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            storage = Storage(data_dir=str(root / "data"), backup_dir=str(root / "backup"))
+            storage.initialize()
+
+            backup_root = root / "backup"
+            self.assertTrue((backup_root / "ce_records.parquet").exists())
+            self.assertTrue((backup_root / "ce_records.csv").exists())
+            self.assertTrue((backup_root / "events").is_dir())
+
     def test_backup_contains_parquet_and_event_folder_after_write(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
@@ -30,6 +41,7 @@ class StorageBackupTests(unittest.TestCase):
 
             backup_root = root / "backup"
             self.assertTrue((backup_root / "ce_records.parquet").exists())
+            self.assertTrue((backup_root / "ce_records.csv").exists())
             self.assertTrue(
                 (
                     backup_root

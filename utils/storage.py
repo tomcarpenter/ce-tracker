@@ -41,6 +41,7 @@ class Storage:
         self.audit_log_path = self.data_dir / "audit_log.csv"
         self.backup_dir = Path(backup_dir) if backup_dir else self._configured_backup_dir()
         self.backup_parquet_path = self.backup_dir / "ce_records.parquet"
+        self.backup_csv_path = self.backup_dir / "ce_records.csv"
         self.backup_audit_log_path = self.backup_dir / "audit_log.csv"
         self.backup_events_dir = self.backup_dir / "events"
         self.initialized = False
@@ -175,6 +176,7 @@ class Storage:
             if self.parquet_path.exists():
                 shutil.copy2(self.parquet_path, self.backup_parquet_path)
                 backup_records = self.load_parquet()
+                backup_records.to_csv(self.backup_csv_path, index=False)
                 if self.backup_events_dir.exists():
                     shutil.rmtree(self.backup_events_dir)
                 write_ce_folders(backup_records, self.backup_events_dir)

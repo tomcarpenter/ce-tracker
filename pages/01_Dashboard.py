@@ -22,7 +22,6 @@ st.title("📊 CE Tracking Dashboard")
 
 # Initialize
 storage = st.session_state.get("storage") or Storage()
-tracker = st.session_state.get("tracker") or ComplianceTracker(storage)
 
 # Ensure data initialized
 storage.initialize()
@@ -39,6 +38,7 @@ def load_settings():
         "suicide_start": "2020-01-01",
         "equity_start": "2022-01-01",
         "pmhc_start": "2023-01-01",
+        "requirements": ComplianceTracker.DEFAULT_REQUIREMENTS,
     }
     if not settings_file.exists():
         return defaults
@@ -47,10 +47,12 @@ def load_settings():
         loaded_settings = json.load(f)
 
     defaults.update(loaded_settings)
+    defaults["requirements"] = ComplianceTracker.DEFAULT_REQUIREMENTS | loaded_settings.get("requirements", {})
     return defaults
 
 
 settings = load_settings()
+tracker = ComplianceTracker(storage, requirements=settings["requirements"])
 cycles_config = {
     "LMHC": datetime.strptime(settings["lmhc_start"], "%Y-%m-%d"),
     "Ethics": datetime.strptime(settings["lmhc_start"], "%Y-%m-%d"),
@@ -60,54 +62,94 @@ cycles_config = {
     "PMH-C": datetime.strptime(settings["pmhc_start"], "%Y-%m-%d"),
 }
 
+if "dashboard_cycle_offsets" not in st.session_state:
+    st.session_state.dashboard_cycle_offsets = {}
+
+st.caption("Each counter counts only CE records completed inside its displayed date range.")
+
+
+def render_cycle_status(title: str, cycle_name: str, cycle_start: datetime) -> dict:
+    cycle_offset = get_cycle_offset(cycle_name)
+    status = tracker.get_cycle_status(
+        cycle_name,
+        cycle_start,
+        cycle_offset=cycle_offset,
+    )
+    progress = status["progress_percent"]
+    start_label = status["cycle_start"].strftime("%Y-%m-%d")
+    end_label = status["cycle_end"].strftime("%Y-%m-%d")
+
+    st.subheader(title)
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        if st.button("← Previous", key=f"{cycle_name}_previous_cycle", use_container_width=True):
+            set_cycle_offset(cycle_name, cycle_offset - 1)
+            st.rerun()
+    with col2:
+        if st.button("Current", key=f"{cycle_name}_current_cycle", use_container_width=True):
+            set_cycle_offset(cycle_name, 0)
+            st.rerun()
+    with col3:
+        if st.button("Next →", key=f"{cycle_name}_next_cycle", use_container_width=True):
+            set_cycle_offset(cycle_name, cycle_offset + 1)
+            st.rerun()
+
+    if cycle_offset:
+        st.caption(f"Showing {abs(cycle_offset)} cycle{'s' if abs(cycle_offset) != 1 else ''} {'future' if cycle_offset > 0 else 'past'}.")
+
+    st.progress(progress / 100, text=f"{progress}%")
+    st.caption(
+        f"Required: {status['required_hours']} | Collected: {status['collected_hours']} | "
+        f"Range: {start_label} through {end_label}"
+    )
+
+    return status
+
+
+def get_cycle_offset(cycle_name: str) -> int:
+    return st.session_state.dashboard_cycle_offsets.get(f"{cycle_name}_offset", 0)
+
+
+def set_cycle_offset(cycle_name: str, offset: int) -> None:
+    st.session_state.dashboard_cycle_offsets[f"{cycle_name}_offset"] = offset
+
+
+def filtered_pmhc_records(data: pd.DataFrame, status: dict) -> pd.DataFrame:
+    if data.empty or "is_pmhc" not in data.columns:
+        return data.iloc[0:0]
+
+    pmhc_dates = pd.to_datetime(data["date"])
+    return data[
+        data["is_pmhc"].fillna(0).astype(bool)
+        & (pmhc_dates >= status["cycle_start"])
+        & (pmhc_dates <= status["cycle_end"])
+    ]
+
+
 # Compliance cycles progress
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("LMHC General (2-Year Cycle)")
-    lmhc_status = tracker.get_cycle_status("LMHC", cycles_config["LMHC"])
-    progress = lmhc_status["progress_percent"]
-    st.progress(progress / 100, text=f"{progress}%")
-    st.caption(f"Hours required: {lmhc_status['required_hours']} | Collected: {lmhc_status['collected_hours']}")
+    lmhc_status = render_cycle_status("LMHC General (2-Year Cycle)", "LMHC", cycles_config["LMHC"])
 
 with col2:
-    st.subheader("Ethics (2-Year Cycle)")
-    ethics_status = tracker.get_cycle_status("Ethics", cycles_config["Ethics"])
-    progress = ethics_status["progress_percent"]
-    st.progress(progress / 100, text=f"{progress}%")
-    st.caption(f"Hours required: {ethics_status['required_hours']} | Collected: {ethics_status['collected_hours']}")
+    ethics_status = render_cycle_status("Ethics (2-Year Cycle)", "Ethics", cycles_config["Ethics"])
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Roles (2-Year Cycle)")
-    roles_status = tracker.get_cycle_status("Roles", cycles_config["Roles"])
-    progress = roles_status["progress_percent"]
-    st.progress(progress / 100, text=f"{progress}%")
-    st.caption(f"Hours required: {roles_status['required_hours']} | Collected: {roles_status['collected_hours']}")
+    roles_status = render_cycle_status("Roles (2-Year Cycle)", "Roles", cycles_config["Roles"])
 
 with col2:
-    st.subheader("Suicide Prevention (6-Year Cycle)")
-    suicide_status = tracker.get_cycle_status("Suicide", cycles_config["Suicide"])
-    progress = suicide_status["progress_percent"]
-    st.progress(progress / 100, text=f"{progress}%")
-    st.caption(f"Hours required: {suicide_status['required_hours']} | Collected: {suicide_status['collected_hours']}")
+    suicide_status = render_cycle_status("Suicide Prevention (6-Year Cycle)", "Suicide", cycles_config["Suicide"])
 
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Equity (4-Year Cycle)")
-    equity_status = tracker.get_cycle_status("Equity", cycles_config["Equity"])
-    progress = equity_status["progress_percent"]
-    st.progress(progress / 100, text=f"{progress}%")
-    st.caption(f"Hours required: {equity_status['required_hours']} | Collected: {equity_status['collected_hours']}")
+    equity_status = render_cycle_status("Equity (4-Year Cycle)", "Equity", cycles_config["Equity"])
 
 with col2:
-    st.subheader("PMH-C (2-Year Cycle)")
-    pmhc_status = tracker.get_cycle_status("PMH-C", cycles_config["PMH-C"])
-    progress = pmhc_status["progress_percent"]
-    st.progress(progress / 100, text=f"{progress}%")
-    st.caption(f"Hours required: {pmhc_status['required_hours']} | Collected: {pmhc_status['collected_hours']}")
+    pmhc_status = render_cycle_status("PMH-C (2-Year Cycle)", "PMH-C", cycles_config["PMH-C"])
 
 st.markdown("---")
 
@@ -127,13 +169,35 @@ st.markdown("---")
 # PMH-C helper
 st.subheader("💡 PMH-C Submission Helper")
 
+pmhc_start_label = pmhc_status["cycle_start"].strftime("%Y-%m-%d")
+pmhc_end_label = pmhc_status["cycle_end"].strftime("%Y-%m-%d")
+pmhc_cycle_label = f"{pmhc_start_label} through {pmhc_end_label}"
+pmhc_cycle_offset = get_cycle_offset("PMH-C")
+
+st.caption(f"PMH-C export period: {pmhc_cycle_label}")
+pmhc_col1, pmhc_col2, pmhc_col3 = st.columns(3)
+with pmhc_col1:
+    if st.button("Previous PMH-C Cycle", key="pmhc_export_previous_cycle", use_container_width=True):
+        set_cycle_offset("PMH-C", pmhc_cycle_offset - 1)
+        st.rerun()
+with pmhc_col2:
+    if st.button("Current PMH-C Cycle", key="pmhc_export_current_cycle", use_container_width=True):
+        set_cycle_offset("PMH-C", 0)
+        st.rerun()
+with pmhc_col3:
+    if st.button("Next PMH-C Cycle", key="pmhc_export_next_cycle", use_container_width=True):
+        set_cycle_offset("PMH-C", pmhc_cycle_offset + 1)
+        st.rerun()
+
+if st.session_state.get("pmhc_helper_cycle_label") != pmhc_cycle_label:
+    st.session_state.pop("pmhc_helper_text", None)
+
+pmhc_export_records = filtered_pmhc_records(ce_data, pmhc_status)
+
 col1, col2 = st.columns([1, 1])
 with col1:
     if st.button("Generate PMH-C Copy Text", use_container_width=True):
-        if not ce_data.empty and "is_pmhc" in ce_data.columns:
-            pmhc_records = ce_data[ce_data["is_pmhc"].fillna(0).astype(bool)]
-        else:
-            pmhc_records = ce_data
+        pmhc_records = pmhc_export_records
         course_lines = []
 
         if not pmhc_records.empty:
@@ -149,10 +213,12 @@ with col1:
             "Training/Course Names: Please include the date each CE course was completed. "
             "If a certificate does not include the date, please also upload a receipt/confirmation "
             "of the date for the course.\n\n"
+            f"Selected PMH-C cycle: {pmhc_cycle_label}\n\n"
             f"{courses_text}\n\n"
             "PMH-C form: https://form.jotform.com/231702468692057\n"
             "Reminder: verify the current form link before submitting."
         )
+        st.session_state.pmhc_helper_cycle_label = pmhc_cycle_label
 
 with col2:
     st.link_button(
@@ -168,29 +234,28 @@ if st.session_state.get("pmhc_helper_text"):
         height=220,
     )
 
-    if not ce_data.empty and "is_pmhc" in ce_data.columns:
-        pmhc_export_records = ce_data[ce_data["is_pmhc"].fillna(0).astype(bool)]
-    else:
-        pmhc_export_records = ce_data.iloc[0:0]
-
-    pmhc_zip, pmhc_record_count, pmhc_file_count = build_ce_zip(
-        pmhc_export_records,
-        folder_per_record=True,
-    )
-    st.download_button(
-        "Download PMH-C ZIP Packet",
-        data=pmhc_zip,
-        file_name="pmhc_ce_packet.zip",
-        mime="application/zip",
-        disabled=pmhc_record_count == 0,
-        use_container_width=True,
-    )
-    if pmhc_record_count:
-        st.caption(f"Includes {pmhc_record_count} PMH-C event folders and {pmhc_file_count} attached files.")
-    else:
-        st.caption("No PMH-C-tagged records available for ZIP export.")
 else:
     st.caption("Generate copy-ready text for PMH-C course submission details.")
+
+pmhc_zip, pmhc_record_count, pmhc_file_count = build_ce_zip(
+    pmhc_export_records,
+    folder_per_record=True,
+)
+st.download_button(
+    "Download PMH-C ZIP Packet",
+    data=pmhc_zip,
+    file_name=f"pmhc_ce_packet_{pmhc_start_label}_to_{pmhc_end_label}.zip",
+    mime="application/zip",
+    disabled=pmhc_record_count == 0,
+    use_container_width=True,
+)
+if pmhc_record_count:
+    st.caption(
+        f"Includes {pmhc_record_count} PMH-C event folders and {pmhc_file_count} attached files "
+        f"for {pmhc_cycle_label}."
+    )
+else:
+    st.caption(f"No PMH-C-tagged records available for {pmhc_cycle_label}.")
 
 # Risk alerts
 st.subheader("⚠️ Alerts & Notifications")

@@ -119,6 +119,7 @@ Visit Settings page to configure:
 - Suicide Prevention cycle start date
 - Equity cycle start date
 - PMH-C cycle start date
+- Required CE credits for LMHC General, Ethics, Roles, Suicide Prevention, Equity, and PMH-C
 
 ### Backup Configuration
 - Choose a data backup folder with the Settings folder picker
