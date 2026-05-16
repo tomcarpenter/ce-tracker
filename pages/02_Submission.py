@@ -5,11 +5,15 @@ Submission page - Create new CE entry with file upload and metadata.
 import streamlit as st
 from pathlib import Path
 import sys
+import uuid
+from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
 from utils.compliance import ComplianceTracker
+from utils.hashing import compute_bytes_hash
+from utils.file_manager import CertificateManager
 
 st.set_page_config(page_title="Submission - CE Tracker", layout="wide")
 
@@ -52,12 +56,71 @@ with st.form("ce_submission_form"):
     submitted = st.form_submit_button("Submit CE Entry", type="primary", use_container_width=True)
     
     if submitted:
-        if not title or not date:
-            st.error("Please fill in title and date")
+        # Validate
+        validation_ok, validation_msg = tracker.validate_entry({
+            "title": title,
+            "date": date,
+            "hours": hours,
+            "category": category
+        })
+        
+        if not validation_ok:
+            st.error(validation_msg)
         else:
-            # TODO: Implement write flow
-            st.success(f"✓ CE entry created: {title}")
-            st.balloons()
+            # Prepare record
+            record_id = str(uuid.uuid4())
+            cert_path = None
+            cert_hash = None
+            
+            # Handle certificate upload if provided
+            if certificate_file:
+                try:
+                    cert_mgr = CertificateManager(
+                        root_dir=Path("certificates/root"),
+                        backup_dir=Path("certificates/backup")
+                    )
+                    
+                    file_data = certificate_file.read()
+                    file_hash = compute_bytes_hash(file_data)
+                    
+                    cert_uuid = cert_mgr.store_certificate(
+                        file_data=file_data,
+                        original_filename=certificate_file.name,
+                        file_hash=file_hash,
+                        record_id=record_id
+                    )
+                    
+                    if cert_uuid:
+                        cert_path = f"certificates/root/{cert_uuid}"
+                        cert_hash = file_hash
+                    else:
+                        st.warning("Certificate upload failed, continuing without it")
+                except Exception as e:
+                    st.warning(f"Certificate error: {e}")
+            
+            # Create record
+            record = {
+                "id": record_id,
+                "date": date,
+                "title": title,
+                "category": category,
+                "hours": hours,
+                "notes": notes,
+                "certificate_path": cert_path or "",
+                "certificate_hash": cert_hash or "",
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            # Write to storage
+            success = storage.write_record(record)
+            
+            if success:
+                st.success(f"✓ CE entry created: {title}")
+                st.balloons()
+                st.session_state.clear()  # Reset form
+            else:
+                st.error("Failed to save entry. Check audit log.")
 
 st.markdown("---")
 st.info("""

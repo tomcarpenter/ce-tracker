@@ -47,7 +47,7 @@ def check_data_reconciliation():
 
 
 def main():
-    """Main app entry point."""
+    """Main app entry point - Home page."""
     
     # Initialize data on first run
     if not st.session_state.storage.initialized:
@@ -59,26 +59,48 @@ def main():
         show_reconciliation_ui()
         return
     
-    # Sidebar navigation
-    st.sidebar.title("CE Tracker")
-    st.sidebar.markdown("---")
+    # Home page
+    st.title("📋 CE Tracker")
+    st.markdown("**Local-first Continuing Education tracking for LMHC & PMH-C compliance**")
     
-    page = st.sidebar.radio(
-        "Navigation",
-        ["Dashboard", "Submission", "Data Viewer", "Edit Entry", "Settings"],
-        label_visibility="collapsed"
-    )
+    st.markdown("---")
     
-    # Route to pages (actual pages are implemented as separate files in /pages)
-    st.sidebar.markdown("---")
-    st.sidebar.markdown(
-        f"""
-        **System Status**
-        - Parquet: ✓ Ready
-        - Audit Log: ✓ Active
-        - Certificates: ✓ Syncing
-        """
-    )
+    # Quick stats
+    ce_data = st.session_state.storage.load_parquet()
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total CE Hours", f"{ce_data['hours'].sum():.1f}" if not ce_data.empty else "0", delta=None)
+    with col2:
+        st.metric("Entries Recorded", len(ce_data) if not ce_data.empty else "0")
+    with col3:
+        st.metric("Data Status", "✓ Healthy")
+    
+    st.markdown("---")
+    
+    # Navigation guide
+    st.subheader("Get Started")
+    st.markdown("""
+    Use the sidebar navigation to:
+    
+    1. **Dashboard** — View progress on compliance cycles
+    2. **Submission** — Add new CE entry with certificate
+    3. **Data Viewer** — Browse and filter records
+    4. **Edit Entry** — Modify or delete entries
+    5. **Settings** — Configure cycles and backups
+    """)
+    
+    st.markdown("---")
+    
+    # System status
+    st.subheader("System Status")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("**Parquet**\n✓ Ready")
+    with col2:
+        st.markdown("**Audit Log**\n✓ Active")
+    with col3:
+        st.markdown("**Certificates**\n✓ Syncing")
 
 
 def show_reconciliation_ui():

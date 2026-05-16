@@ -5,6 +5,7 @@ Edit Entry page - Modify existing CE records.
 import streamlit as st
 from pathlib import Path
 import sys
+from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -18,36 +19,48 @@ st.title("✏️ Edit CE Entry")
 storage = st.session_state.get("storage") or Storage()
 tracker = st.session_state.get("tracker") or ComplianceTracker(storage)
 
+# Ensure data initialized
+storage.initialize()
+
 ce_data = storage.load_parquet()
 
 if ce_data.empty:
     st.warning("No CE records to edit.")
+    if st.button("Go to Submission"):
+        st.switch_page("pages/02_Submission.py")
 else:
     # Select entry to edit
-    ce_data_with_labels = ce_data.copy()
-    ce_data_with_labels["label"] = (
-        ce_data_with_labels["date"].astype(str) + " - " + 
-        ce_data_with_labels.get("title", "Untitled")
+    ce_data_copy = ce_data.copy()
+    ce_data_copy["label"] = (
+        pd.to_datetime(ce_data_copy["date"]).dt.strftime("%Y-%m-%d") + " - " + 
+        ce_data_copy.get("title", "Untitled")
     )
     
-    selected_entry = st.selectbox(
+    selected_label = st.selectbox(
         "Select entry to edit",
-        options=ce_data_with_labels["label"],
-        index=None
+        options=ce_data_copy["label"],
+        index=None,
+        placeholder="Choose an entry..."
     )
     
-    if selected_entry:
-        # Find and load the entry
-        idx = ce_data_with_labels[ce_data_with_labels["label"] == selected_entry].index[0]
-        entry = ce_data.loc[idx]
+    if selected_label:
+        # Find the selected entry
+        idx = ce_data_copy[ce_data_copy["label"] == selected_label].index[0]
+        entry = ce_data.loc[idx].to_dict()
         
         st.markdown("---")
+        
+        # Display current metadata
+        with st.expander("Current metadata", expanded=False):
+            st.write(f"**ID:** {entry.get('id', 'N/A')}")
+            st.write(f"**Created:** {entry.get('created_at', 'N/A')}")
+            st.write(f"**Updated:** {entry.get('updated_at', 'N/A')}")
         
         with st.form("ce_edit_form"):
             col1, col2 = st.columns(2)
             
             with col1:
-                date = st.date_input("Date Completed", value=entry.get("date", None))
+                date = st.date_input("Date Completed", value=pd.to_datetime(entry.get("date")))
                 title = st.text_input("Course/Training Title", value=entry.get("title", ""))
             
             with col2:
@@ -70,18 +83,43 @@ else:
                 value=entry.get("notes", "")
             )
             
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             
             with col1:
-                submitted = st.form_submit_button("Save Changes", type="primary", use_container_width=True)
+                submitted = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
             
             with col2:
-                deleted = st.form_submit_button("Delete Entry", type="secondary", use_container_width=True)
+                st.write("")
+            
+            with col3:
+                deleted = st.form_submit_button("🗑️ Delete Entry", type="secondary", use_container_width=True)
             
             if submitted:
-                # TODO: Update in storage
-                st.success("✓ Entry updated")
+                # Update entry
+                entry["date"] = date
+                entry["title"] = title
+                entry["category"] = category
+                entry["hours"] = hours
+                entry["notes"] = notes
+                entry["updated_at"] = datetime.now().isoformat()
+                
+                success = storage.write_record(entry)
+                
+                if success:
+                    st.success("✓ Entry updated successfully")
+                    st.rerun()
+                else:
+                    st.error("Failed to update entry")
             
             if deleted:
-                # TODO: Delete from storage
-                st.warning("✓ Entry deleted")
+                # Delete entry
+                success = storage.delete_record(entry["id"])
+                
+                if success:
+                    st.success("✓ Entry deleted successfully")
+                    st.session_state.clear()
+                    st.rerun()
+                else:
+                    st.error("Failed to delete entry")
+
+import pandas as pd
