@@ -26,9 +26,9 @@ The app will open automatically at `http://localhost:8501`
 ## Architecture
 
 **Data Model:**
-- **Parquet** (ce_records.parquet) = Source of truth
-- **CSV** (ce_records.csv) = External mirror for compatibility
-- **Certificates** = Dual storage (root + backup) with SHA256 hashing
+- **Parquet** (`data/ce_records.parquet`) = Source of truth
+- **Backup Folder** (`backup_data/` by default) = `ce_records.parquet` plus per-event folders
+- **Certificates** = UUID-named local storage with SHA256 hashing
 - **Audit Log** = Append-only change tracking
 
 **Runtime:**
@@ -53,29 +53,39 @@ ce_tracker/
 │   ├── 04_Edit_Entry.py
 │   └── 05_Settings.py
 ├── utils/                      # Core modules
-│   ├── storage.py              # Parquet/CSV sync
+│   ├── storage.py              # Local data + backup mirror
 │   ├── compliance.py           # Cycle tracking
 │   ├── hashing.py              # SHA256 verification
 │   ├── sync.py                 # File mirroring
 │   └── file_manager.py         # Certificate storage
+├── tests/                      # Regression tests for exports/backups
 ├── data/
 │   ├── ce_records.parquet      # Primary storage
-│   ├── ce_records.csv          # Mirror
 │   └── audit_log.csv           # Append-only log
 ├── certificates/
 │   ├── root/                   # Primary storage
 │   ├── backup/                 # Mirror storage
 │   └── metadata/               # Certificate metadata
-└── backup_csv/                 # User-selected CSV destination
+└── backup_data/                # Backup mirror
+    ├── ce_records.parquet
+    ├── audit_log.csv
+    └── events/
+        └── ce_YYYY-MM-DD_Event_Name/
+            ├── ce_YYYY-MM-DD_Event_Name.txt
+            └── ce_YYYY-MM-DD_Event_Name.pdf
 ```
 
 ## Features
 
 ### Compliance Tracking
-- **LMHC**: 40 hours per 2-year cycle
+- **LMHC General**: 32 hours per 2-year cycle
+- **Ethics**: 6 hours per 2-year cycle (counts toward LMHC General)
+- **Roles**: 2 hours per 2-year cycle (counts toward LMHC General)
 - **Suicide Prevention**: 6 hours per 6-year cycle
-- **Equity**: 6 hours per 4-year cycle
-- **PMH-C**: 60 hours per 2-year cycle
+- **Equity**: 2 hours per 4-year cycle
+- **PMH-C**: 12 hours per 2-year cycle
+
+Submission categories are stored as independent 1/0 flags. Ethics and Roles cannot be selected on the same CE entry.
 
 ### Pages
 1. **Dashboard** - Progress tracking with cycle progress bars
@@ -86,10 +96,10 @@ ce_tracker/
 
 ### Data Safety
 - Write-to-Parquet-first pattern (rollback on failure)
-- Startup reconciliation check (Parquet vs CSV)
+- Automatic separate-folder backup mirror
 - Append-only audit log
 - Certificate hashing + UUID naming
-- Dual-location backup
+- Per-event evidence folders in backup
 
 ## Dependencies
 
@@ -111,9 +121,9 @@ Visit Settings page to configure:
 - PMH-C cycle start date
 
 ### Backup Configuration
-- Set external CSV backup folder (e.g., iCloud Drive)
-- Set external certificate backup folder
-- App automatically mirrors files during sync
+- Choose a data backup folder with the Settings folder picker
+- App automatically updates the backup after submissions, edits, and deletes
+- Backup contains a parent Parquet file and an `events/` folder with one subfolder per CE event
 
 ### PMH-C Submissions
 Get helper text and form link on Dashboard page:
@@ -123,13 +133,7 @@ Get helper text and form link on Dashboard page:
 
 ## Data Recovery
 
-If conflicts occur:
-1. App detects mismatch on startup
-2. Shows reconciliation UI
-3. Options:
-   - **Safe**: Use Parquet (recommended)
-   - **Recovery**: Use CSV (if Parquet corrupted)
-   - View detailed row comparison
+The backup folder keeps a copy of `ce_records.parquet` plus human-readable event folders for recovery/reference.
 
 ## Troubleshooting
 
@@ -153,8 +157,8 @@ streamlit run app.py
 
 ### Data sync issues
 - Visit Settings page
-- Click "Force Reconciliation Check"
-- Review reconciliation UI if needed
+- Confirm the data backup folder path is available
+- Save settings to refresh the automatic backup mirror
 
 ## Notes
 

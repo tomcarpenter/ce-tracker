@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional
 from datetime import datetime
 import json
+import shutil
 
 
 class CertificateManager:
@@ -126,3 +127,45 @@ class CertificateManager:
                 pass
         
         return certs
+
+    def delete_certificate_by_path(self, certificate_path: str) -> bool:
+        """Delete a stored certificate and its metadata by stored path."""
+        if not certificate_path:
+            return True
+
+        try:
+            cert_path = Path(certificate_path)
+            cert_uuid = cert_path.stem
+            stored_filename = cert_path.name
+
+            for base_dir in [self.root_dir, self.backup_dir]:
+                if not base_dir:
+                    continue
+                candidate = Path(base_dir) / stored_filename
+                if candidate.exists():
+                    candidate.unlink()
+
+            metadata_path = self.metadata_dir / f"{cert_uuid}.json"
+            if metadata_path.exists():
+                metadata_path.unlink()
+
+            return True
+        except Exception:
+            return False
+
+    def copy_certificate_to_folder(self, certificate_path: str, destination_dir: Path) -> Optional[Path]:
+        """Copy a stored certificate to a user-facing export folder."""
+        if not certificate_path:
+            return None
+
+        source = Path(certificate_path)
+        if not source.exists():
+            source = self.root_dir / source.name
+
+        if not source.exists():
+            return None
+
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        destination = destination_dir / source.name
+        shutil.copy2(source, destination)
+        return destination

@@ -5,18 +5,31 @@ Submission page - Create new CE entry with file upload and metadata.
 import streamlit as st
 from pathlib import Path
 import sys
+import uuid
+from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
 from utils.compliance import ComplianceTracker
+from utils.hashing import compute_bytes_hash
+from utils.file_manager import CertificateManager
+from utils.navigation import render_sidebar_nav
 
-st.set_page_config(page_title="Submission - CE Tracker", layout="wide")
-
+render_sidebar_nav("Submission")
 st.title("➕ Submit CE Entry")
 
 storage = st.session_state.get("storage") or Storage()
 tracker = st.session_state.get("tracker") or ComplianceTracker(storage)
+
+CATEGORY_OPTIONS = [
+    ("is_lmhc_general", "LMHC General"),
+    ("is_ethics", "Ethics"),
+    ("is_roles", "Roles"),
+    ("is_suicide", "Suicide Prevention"),
+    ("is_equity", "Equity"),
+    ("is_pmhc", "PMH-C"),
+]
 
 with st.form("ce_submission_form"):
     # Core fields
@@ -27,11 +40,16 @@ with st.form("ce_submission_form"):
         title = st.text_input("Course/Training Title")
     
     with col2:
-        category = st.selectbox(
-            "Compliance Category",
-            ["LMHC General", "Suicide Prevention", "Equity", "PMH-C", "Other"]
-        )
         hours = st.number_input("CE Hours", min_value=0.0, max_value=40.0, step=0.5)
+
+    st.markdown("---")
+    st.subheader("Compliance Categories")
+    selected_categories = {}
+    col1, col2, col3 = st.columns(3)
+    category_columns = [col1, col2, col3, col1, col2, col3]
+    for column, (flag, label) in zip(category_columns, CATEGORY_OPTIONS):
+        with column:
+            selected_categories[flag] = st.checkbox(label)
     
     # Certificate upload
     st.markdown("---")
@@ -52,12 +70,70 @@ with st.form("ce_submission_form"):
     submitted = st.form_submit_button("Submit CE Entry", type="primary", use_container_width=True)
     
     if submitted:
-        if not title or not date:
-            st.error("Please fill in title and date")
+        # Validate
+        validation_ok, validation_msg = tracker.validate_entry({
+            "title": title,
+            "date": date,
+            "hours": hours,
+            **selected_categories,
+        })
+        
+        if not validation_ok:
+            st.error(validation_msg)
         else:
-            # TODO: Implement write flow
-            st.success(f"✓ CE entry created: {title}")
-            st.balloons()
+            # Prepare record
+            record_id = str(uuid.uuid4())
+            cert_path = None
+            cert_hash = None
+            
+            # Handle certificate upload if provided
+            if certificate_file:
+                try:
+                    cert_mgr = CertificateManager(
+                        root_dir=Path("certificates/root"),
+                        backup_dir=Path("certificates/backup")
+                    )
+                    
+                    file_data = certificate_file.read()
+                    file_hash = compute_bytes_hash(file_data)
+                    
+                    cert_uuid = cert_mgr.store_certificate(
+                        file_data=file_data,
+                        original_filename=certificate_file.name,
+                        file_hash=file_hash,
+                        record_id=record_id
+                    )
+                    
+                    if cert_uuid:
+                        cert_path = f"certificates/root/{cert_uuid}{Path(certificate_file.name).suffix}"
+                        cert_hash = file_hash
+                    else:
+                        st.warning("Certificate upload failed, continuing without it")
+                except Exception as e:
+                    st.warning(f"Certificate error: {e}")
+            
+            # Create record
+            record = {
+                "id": record_id,
+                "date": date,
+                "title": title,
+                **{flag: int(selected) for flag, selected in selected_categories.items()},
+                "hours": hours,
+                "notes": notes,
+                "certificate_path": cert_path or "",
+                "certificate_hash": cert_hash or "",
+                "created_at": datetime.now().isoformat(),
+                "updated_at": datetime.now().isoformat()
+            }
+            
+            # Write to storage
+            success = storage.write_record(record)
+            
+            if success:
+                st.success(f"✓ CE entry created: {title}")
+                st.balloons()
+            else:
+                st.error("Failed to save entry. Check audit log.")
 
 st.markdown("---")
 st.info("""
