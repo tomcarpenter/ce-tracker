@@ -6,15 +6,16 @@ Displays progress bars for LMHC, Suicide, Equity, and PMH-C cycles.
 import streamlit as st
 from pathlib import Path
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime
+import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
 from utils.compliance import ComplianceTracker
+from utils.navigation import render_sidebar_nav
 
-st.set_page_config(page_title="Dashboard - CE Tracker", layout="wide")
-
+render_sidebar_nav("Dashboard")
 st.title("📊 CE Tracking Dashboard")
 
 # Initialize
@@ -29,12 +30,30 @@ ce_data = storage.load_parquet()
 
 st.markdown("---")
 
-# Get cycle config (use defaults or from settings)
+def load_settings():
+    settings_file = Path("data/settings.json")
+    defaults = {
+        "lmhc_start": "2023-01-01",
+        "suicide_start": "2020-01-01",
+        "equity_start": "2022-01-01",
+        "pmhc_start": "2023-01-01",
+    }
+    if not settings_file.exists():
+        return defaults
+
+    with open(settings_file, "r") as f:
+        loaded_settings = json.load(f)
+
+    defaults.update(loaded_settings)
+    return defaults
+
+
+settings = load_settings()
 cycles_config = {
-    "LMHC": datetime(2023, 1, 1),  # TODO: Get from settings
-    "Suicide": datetime(2020, 1, 1),
-    "Equity": datetime(2022, 1, 1),
-    "PMH-C": datetime(2023, 1, 1),
+    "LMHC": datetime.strptime(settings["lmhc_start"], "%Y-%m-%d"),
+    "Suicide": datetime.strptime(settings["suicide_start"], "%Y-%m-%d"),
+    "Equity": datetime.strptime(settings["equity_start"], "%Y-%m-%d"),
+    "PMH-C": datetime.strptime(settings["pmhc_start"], "%Y-%m-%d"),
 }
 
 # Compliance cycles progress

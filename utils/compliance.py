@@ -17,6 +17,7 @@ class ComplianceTracker:
         "Suicide Prevention": {"hours": 6, "cycle_years": 6},
         "Equity": {"hours": 6, "cycle_years": 4},
         "PMH-C": {"hours": 60, "cycle_years": 2},
+        "Other": {"hours": 0, "cycle_years": 0},
     }
     
     def __init__(self, storage):
@@ -61,7 +62,7 @@ class ComplianceTracker:
             "days_remaining": (cycle_end - datetime.now()).days,
             "required_hours": required_hours,
             "collected_hours": round(collected_hours, 1),
-            "progress_percent": int(progress_pct),
+            "progress_percent": min(int(progress_pct), 100),
             "is_complete": collected_hours >= required_hours,
             "needs_attention": progress_pct < 50 and (cycle_end - datetime.now()).days < 90,
         }

@@ -6,14 +6,15 @@ import streamlit as st
 from pathlib import Path
 import sys
 from datetime import datetime
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
 from utils.compliance import ComplianceTracker
+from utils.navigation import render_sidebar_nav
 
-st.set_page_config(page_title="Edit Entry - CE Tracker", layout="wide")
-
+render_sidebar_nav("Edit Entry")
 st.title("✏️ Edit CE Entry")
 
 storage = st.session_state.get("storage") or Storage()
@@ -57,6 +58,8 @@ else:
             st.write(f"**Updated:** {entry.get('updated_at', 'N/A')}")
         
         with st.form("ce_edit_form"):
+            categories = ["LMHC General", "Suicide Prevention", "Equity", "PMH-C", "Other"]
+
             col1, col2 = st.columns(2)
             
             with col1:
@@ -66,8 +69,10 @@ else:
             with col2:
                 category = st.selectbox(
                     "Compliance Category",
-                    ["LMHC General", "Suicide Prevention", "Equity", "PMH-C", "Other"],
-                    index=0
+                    categories,
+                    index=categories.index(entry.get("category", "LMHC General"))
+                    if entry.get("category", "LMHC General") in categories
+                    else 0,
                 )
                 hours = st.number_input(
                     "CE Hours",
@@ -117,9 +122,6 @@ else:
                 
                 if success:
                     st.success("✓ Entry deleted successfully")
-                    st.session_state.clear()
                     st.rerun()
                 else:
                     st.error("Failed to delete entry")
-
-import pandas as pd

@@ -22,6 +22,8 @@ env/
 
 # Streamlit
 .streamlit/
+!.streamlit/
+!.streamlit/config.toml
 *.streamlit.cache/
 
 # Data (gitignore actual records, keep structure)

@@ -5,13 +5,14 @@ Data Viewer page - Browse, filter, and inspect CE records.
 import streamlit as st
 from pathlib import Path
 import sys
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
+from utils.navigation import render_sidebar_nav
 
-st.set_page_config(page_title="Data Viewer - CE Tracker", layout="wide")
-
+render_sidebar_nav("Data Viewer")
 st.title("🔍 Data Viewer")
 
 storage = st.session_state.get("storage") or Storage()
@@ -55,7 +56,6 @@ else:
         search_text = st.text_input("Search title", placeholder="Type to filter...")
     
     # Apply filters
-    import pandas as pd
     filtered = ce_data.copy()
     filtered["date"] = pd.to_datetime(filtered["date"])
     

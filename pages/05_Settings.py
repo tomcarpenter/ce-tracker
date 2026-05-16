@@ -11,9 +11,9 @@ import json
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
+from utils.navigation import render_sidebar_nav
 
-st.set_page_config(page_title="Settings - CE Tracker", layout="wide")
-
+render_sidebar_nav("Settings")
 st.title("⚙️ Settings")
 
 storage = st.session_state.get("storage") or Storage()

@@ -14,9 +14,9 @@ from utils.storage import Storage
 from utils.compliance import ComplianceTracker
 from utils.hashing import compute_bytes_hash
 from utils.file_manager import CertificateManager
+from utils.navigation import render_sidebar_nav
 
-st.set_page_config(page_title="Submission - CE Tracker", layout="wide")
-
+render_sidebar_nav("Submission")
 st.title("➕ Submit CE Entry")
 
 storage = st.session_state.get("storage") or Storage()
@@ -91,7 +91,7 @@ with st.form("ce_submission_form"):
                     )
                     
                     if cert_uuid:
-                        cert_path = f"certificates/root/{cert_uuid}"
+                        cert_path = f"certificates/root/{cert_uuid}{Path(certificate_file.name).suffix}"
                         cert_hash = file_hash
                     else:
                         st.warning("Certificate upload failed, continuing without it")
@@ -118,7 +118,6 @@ with st.form("ce_submission_form"):
             if success:
                 st.success(f"✓ CE entry created: {title}")
                 st.balloons()
-                st.session_state.clear()  # Reset form
             else:
                 st.error("Failed to save entry. Check audit log.")
 

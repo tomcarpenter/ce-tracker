@@ -8,7 +8,6 @@ Reconciliation on startup if mismatch detected.
 import pandas as pd
 from pathlib import Path
 from typing import Optional, Dict, Any
-import json
 
 class Storage:
     """Manage CE records with Parquet truth and CSV mirror."""
@@ -69,7 +68,7 @@ class Storage:
         elif set(parquet_df.columns) != set(csv_df.columns):
             needs_reconciliation = True
             reason = "Column mismatch"
-        elif not parquet_df.equals(csv_df):
+        elif not self._normalize_for_compare(parquet_df).equals(self._normalize_for_compare(csv_df)):
             needs_reconciliation = True
             reason = "Data mismatch"
         
@@ -111,12 +110,16 @@ class Storage:
         Atomic write to Parquet first, then CSV.
         Rollback on failure.
         """
+        previous_df = self.load_parquet()
+        previous_csv = self.load_csv()
+
         try:
-            # Load current state
-            df = self.load_parquet()
+            df = previous_df.copy()
+            record_id = record.get("id")
+            is_update = bool(record_id) and record_id in set(df.get("id", []))
             
             # Add or update record
-            if "id" in record:
+            if record_id:
                 df = df[df["id"] != record["id"]]
             
             new_df = pd.concat([df, pd.DataFrame([record])], ignore_index=True)
@@ -128,13 +131,18 @@ class Storage:
             new_df.to_csv(self.csv_path, index=False)
             
             # Log to audit
-            self._audit_log("create" if "id" not in record else "update", 
+            self._audit_log("update" if is_update else "create",
                           record.get("id"), 
                           f"Entry: {record.get('title', 'Untitled')}")
             
             return True
         
         except Exception as e:
+            try:
+                previous_df.to_parquet(self.parquet_path, index=False)
+                previous_csv.to_csv(self.csv_path, index=False)
+            except Exception:
+                pass
             self._audit_log("error", record.get("id"), str(e))
             return False
     
@@ -172,3 +180,19 @@ class Storage:
             audit_df = new_entry
         
         audit_df.to_csv(self.audit_log_path, index=False)
+
+    @staticmethod
+    def _normalize_for_compare(df: pd.DataFrame) -> pd.DataFrame:
+        """Normalize dtype differences introduced by Parquet/CSV round-trips."""
+        normalized = df.copy()
+        normalized = normalized.reindex(sorted(normalized.columns), axis=1)
+
+        for column in normalized.columns:
+            normalized[column] = normalized[column].fillna("").astype(str)
+
+        if "id" in normalized.columns:
+            normalized = normalized.sort_values("id").reset_index(drop=True)
+        else:
+            normalized = normalized.reset_index(drop=True)
+
+        return normalized

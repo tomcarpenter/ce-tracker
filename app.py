@@ -1,24 +1,19 @@
-"""
-CE Tracker - Local-first Streamlit application for compliance tracking.
-LMHC + PMH-C continuous education tracking with offline-first architecture.
-"""
-
-import streamlit as st
 from pathlib import Path
+import runpy
 import sys
 
-# Ensure utils can be imported
+import streamlit as st
+
 sys.path.insert(0, str(Path(__file__).parent))
 
-from utils.storage import Storage
 from utils.compliance import ComplianceTracker
+from utils.storage import Storage
 
-# Page configuration
 st.set_page_config(
     page_title="CE Tracker",
     page_icon="📋",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # Initialize session state
@@ -47,60 +42,16 @@ def check_data_reconciliation():
 
 
 def main():
-    """Main app entry point - Home page."""
-    
-    # Initialize data on first run
+    """Initialize app state, handle reconciliation, then route to pages."""
     if not st.session_state.storage.initialized:
         st.session_state.storage.initialize()
-    
-    # Check for reconciliation needs
+
     if check_data_reconciliation():
         st.warning("⚠️ Data reconciliation needed")
         show_reconciliation_ui()
         return
-    
-    # Home page
-    st.title("📋 CE Tracker")
-    st.markdown("**Local-first Continuing Education tracking for LMHC & PMH-C compliance**")
-    
-    st.markdown("---")
-    
-    # Quick stats
-    ce_data = st.session_state.storage.load_parquet()
-    
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("Total CE Hours", f"{ce_data['hours'].sum():.1f}" if not ce_data.empty else "0", delta=None)
-    with col2:
-        st.metric("Entries Recorded", len(ce_data) if not ce_data.empty else "0")
-    with col3:
-        st.metric("Data Status", "✓ Healthy")
-    
-    st.markdown("---")
-    
-    # Navigation guide
-    st.subheader("Get Started")
-    st.markdown("""
-    Use the sidebar navigation to:
-    
-    1. **Dashboard** — View progress on compliance cycles
-    2. **Submission** — Add new CE entry with certificate
-    3. **Data Viewer** — Browse and filter records
-    4. **Edit Entry** — Modify or delete entries
-    5. **Settings** — Configure cycles and backups
-    """)
-    
-    st.markdown("---")
-    
-    # System status
-    st.subheader("System Status")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("**Parquet**\n✓ Ready")
-    with col2:
-        st.markdown("**Audit Log**\n✓ Active")
-    with col3:
-        st.markdown("**Certificates**\n✓ Syncing")
+
+    runpy.run_path(str(Path(__file__).parent / "pages/01_Dashboard.py"))
 
 
 def show_reconciliation_ui():
