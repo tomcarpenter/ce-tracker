@@ -38,6 +38,7 @@ certificates/metadata/*
 
 # Backups
 backup_csv/*
+backup_data/*
 
 # OS
 .DS_Store

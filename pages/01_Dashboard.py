@@ -51,6 +51,8 @@ def load_settings():
 settings = load_settings()
 cycles_config = {
     "LMHC": datetime.strptime(settings["lmhc_start"], "%Y-%m-%d"),
+    "Ethics": datetime.strptime(settings["lmhc_start"], "%Y-%m-%d"),
+    "Roles": datetime.strptime(settings["lmhc_start"], "%Y-%m-%d"),
     "Suicide": datetime.strptime(settings["suicide_start"], "%Y-%m-%d"),
     "Equity": datetime.strptime(settings["equity_start"], "%Y-%m-%d"),
     "PMH-C": datetime.strptime(settings["pmhc_start"], "%Y-%m-%d"),
@@ -60,11 +62,27 @@ cycles_config = {
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("LMHC (2-Year Cycle)")
+    st.subheader("LMHC General (2-Year Cycle)")
     lmhc_status = tracker.get_cycle_status("LMHC", cycles_config["LMHC"])
     progress = lmhc_status["progress_percent"]
     st.progress(progress / 100, text=f"{progress}%")
     st.caption(f"Hours required: {lmhc_status['required_hours']} | Collected: {lmhc_status['collected_hours']}")
+
+with col2:
+    st.subheader("Ethics (2-Year Cycle)")
+    ethics_status = tracker.get_cycle_status("Ethics", cycles_config["Ethics"])
+    progress = ethics_status["progress_percent"]
+    st.progress(progress / 100, text=f"{progress}%")
+    st.caption(f"Hours required: {ethics_status['required_hours']} | Collected: {ethics_status['collected_hours']}")
+
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("Roles (2-Year Cycle)")
+    roles_status = tracker.get_cycle_status("Roles", cycles_config["Roles"])
+    progress = roles_status["progress_percent"]
+    st.progress(progress / 100, text=f"{progress}%")
+    st.caption(f"Hours required: {roles_status['required_hours']} | Collected: {roles_status['collected_hours']}")
 
 with col2:
     st.subheader("Suicide Prevention (6-Year Cycle)")

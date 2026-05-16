@@ -22,6 +22,15 @@ st.title("➕ Submit CE Entry")
 storage = st.session_state.get("storage") or Storage()
 tracker = st.session_state.get("tracker") or ComplianceTracker(storage)
 
+CATEGORY_OPTIONS = [
+    ("is_lmhc_general", "LMHC General"),
+    ("is_ethics", "Ethics"),
+    ("is_roles", "Roles"),
+    ("is_suicide", "Suicide Prevention"),
+    ("is_equity", "Equity"),
+    ("is_pmhc", "PMH-C"),
+]
+
 with st.form("ce_submission_form"):
     # Core fields
     col1, col2 = st.columns(2)
@@ -31,11 +40,16 @@ with st.form("ce_submission_form"):
         title = st.text_input("Course/Training Title")
     
     with col2:
-        category = st.selectbox(
-            "Compliance Category",
-            ["LMHC General", "Suicide Prevention", "Equity", "PMH-C", "Other"]
-        )
         hours = st.number_input("CE Hours", min_value=0.0, max_value=40.0, step=0.5)
+
+    st.markdown("---")
+    st.subheader("Compliance Categories")
+    selected_categories = {}
+    col1, col2, col3 = st.columns(3)
+    category_columns = [col1, col2, col3, col1, col2, col3]
+    for column, (flag, label) in zip(category_columns, CATEGORY_OPTIONS):
+        with column:
+            selected_categories[flag] = st.checkbox(label)
     
     # Certificate upload
     st.markdown("---")
@@ -61,7 +75,7 @@ with st.form("ce_submission_form"):
             "title": title,
             "date": date,
             "hours": hours,
-            "category": category
+            **selected_categories,
         })
         
         if not validation_ok:
@@ -103,7 +117,7 @@ with st.form("ce_submission_form"):
                 "id": record_id,
                 "date": date,
                 "title": title,
-                "category": category,
+                **{flag: int(selected) for flag, selected in selected_categories.items()},
                 "hours": hours,
                 "notes": notes,
                 "certificate_path": cert_path or "",

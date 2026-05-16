@@ -34,7 +34,7 @@ def load_settings():
         "suicide_start": "2020-01-01",
         "equity_start": "2022-01-01",
         "pmhc_start": "2023-01-01",
-        "csv_backup_path": "",
+        "data_backup_path": "backup_data",
         "cert_backup_path": ""
     }
 
@@ -77,10 +77,10 @@ st.subheader("Backup Configuration")
 col1, col2 = st.columns(2)
 
 with col1:
-    csv_backup_path = st.text_input(
-        "CSV Backup Folder",
-        value=settings.get("csv_backup_path", ""),
-        help="External folder for CSV mirror (optional)"
+    data_backup_path = st.text_input(
+        "Data Backup Folder",
+        value=settings.get("data_backup_path") or settings.get("csv_backup_path", "backup_data"),
+        help="Folder for the backup copy of the local data file"
     )
 
 with col2:
@@ -96,15 +96,15 @@ st.markdown("---")
 st.subheader("Sync & Data Status")
 
 ce_data = storage.load_parquet()
-csv_data = storage.load_csv()
+backup_status = storage.backup_status()
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    st.metric("Parquet Records", len(ce_data))
+    st.metric("Local Records", len(ce_data))
 
 with col2:
-    st.metric("CSV Records", len(csv_data))
+    st.metric("Backup Records", backup_status["backup_rows"])
 
 with col3:
     certs_dir = Path("certificates/root")
@@ -114,12 +114,11 @@ with col3:
 col1, col2 = st.columns(2)
 
 with col1:
-    if st.button("🔄 Force Reconciliation Check", use_container_width=True):
-        status = storage.reconciliation_status()
-        if status["needs_reconciliation"]:
-            st.warning(f"⚠️ Mismatch detected: {status['reason']}")
+    if st.button("🔄 Sync Backup Now", use_container_width=True):
+        if storage.sync_backup():
+            st.success("✓ Backup refreshed")
         else:
-            st.success("✓ All data synchronized")
+            st.warning("Backup sync failed. Check the backup folder path.")
 
 with col2:
     if st.button("📊 View Audit Log", use_container_width=True):
@@ -149,10 +148,12 @@ with col1:
 
 with col2:
     if st.button("📤 Import from Backup", use_container_width=True):
-        st.info("Upload CSV file to import records")
-        uploaded_file = st.file_uploader("Choose CSV file", type=["csv"])
-        if uploaded_file:
-            st.info("Import functionality coming soon")
+        if storage.backup_parquet_path.exists():
+            storage.restore_from_backup()
+            st.success("✓ Restored local data from backup")
+            st.rerun()
+        else:
+            st.warning("No backup data file found.")
 
 st.markdown("---")
 
@@ -163,8 +164,10 @@ if st.button("💾 Save All Settings", type="primary", use_container_width=True)
         "suicide_start": str(suicide_start),
         "equity_start": str(equity_start),
         "pmhc_start": str(pmhc_start),
-        "csv_backup_path": csv_backup_path,
+        "data_backup_path": data_backup_path,
         "cert_backup_path": cert_backup_path
     }
     save_settings(new_settings)
+    st.session_state.storage = Storage(backup_dir=data_backup_path)
+    st.session_state.storage.initialize()
     st.success("✓ Settings saved successfully")

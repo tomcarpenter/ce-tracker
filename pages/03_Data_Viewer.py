@@ -11,6 +11,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
 from utils.navigation import render_sidebar_nav
+from utils.storage import CATEGORY_LABELS
 
 render_sidebar_nav("Data Viewer")
 st.title("🔍 Data Viewer")
@@ -35,10 +36,9 @@ else:
     col1, col2, col3 = st.columns(3)
     
     with col1:
-        categories = sorted(ce_data["category"].unique().tolist())
         selected_category = st.multiselect(
             "Category",
-            options=categories,
+            options=list(CATEGORY_LABELS.values()),
             default=None
         )
     
@@ -60,7 +60,14 @@ else:
     filtered["date"] = pd.to_datetime(filtered["date"])
     
     if selected_category:
-        filtered = filtered[filtered["category"].isin(selected_category)]
+        selected_flags = [
+            flag for flag, label in CATEGORY_LABELS.items() if label in selected_category
+        ]
+        matches_selected_category = pd.Series(False, index=filtered.index)
+        for flag in selected_flags:
+            if flag in filtered.columns:
+                matches_selected_category = matches_selected_category | filtered[flag].fillna(0).astype(bool)
+        filtered = filtered[matches_selected_category]
     
     if len(date_range) == 2 and date_range[0] and date_range[1]:
         import datetime
