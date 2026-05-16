@@ -119,6 +119,9 @@ if "data_backup_path" not in st.session_state:
         settings.get("data_backup_path") or settings.get("csv_backup_path", "backup_data")
     )
 
+if st.session_state.get("selected_backup_folder"):
+    st.session_state.data_backup_path = st.session_state.pop("selected_backup_folder")
+
 col1, col2 = st.columns([3, 1])
 
 with col1:
@@ -134,7 +137,7 @@ with col2:
     if st.button("Browse...", use_container_width=True):
         selected_folder = choose_backup_folder()
         if selected_folder:
-            st.session_state.data_backup_path = selected_folder
+            st.session_state.selected_backup_folder = selected_folder
             st.rerun()
 
 st.caption("Backup is automatic after submissions, edits, and deletes. The folder contains ce_records.parquet plus an events folder with one subfolder per CE event.")
