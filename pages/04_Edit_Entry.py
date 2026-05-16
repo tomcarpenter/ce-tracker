@@ -6,6 +6,7 @@ import streamlit as st
 from pathlib import Path
 import sys
 from datetime import datetime
+import base64
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -13,6 +14,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.storage import Storage
 from utils.compliance import ComplianceTracker
 from utils.navigation import render_sidebar_nav
+from utils.file_manager import CertificateManager
+from utils.hashing import compute_bytes_hash
 
 render_sidebar_nav("Edit Entry")
 st.title("✏️ Edit CE Entry")
@@ -28,6 +31,38 @@ CATEGORY_OPTIONS = [
     ("is_equity", "Equity"),
     ("is_pmhc", "PMH-C"),
 ]
+
+
+def certificate_file_path(certificate_path: str) -> Path | None:
+    """Resolve a stored certificate path to a readable local file."""
+    if not certificate_path:
+        return None
+
+    path = Path(certificate_path)
+    if path.exists():
+        return path
+
+    fallback = Path("certificates/root") / path.name
+    if fallback.exists():
+        return fallback
+
+    return None
+
+
+def render_certificate_preview(path: Path) -> None:
+    """Render a lightweight preview for the current certificate."""
+    suffix = path.suffix.lower()
+
+    if suffix == ".pdf":
+        encoded_pdf = base64.b64encode(path.read_bytes()).decode("utf-8")
+        st.markdown(
+            f'<iframe src="data:application/pdf;base64,{encoded_pdf}" width="100%" height="520"></iframe>',
+            unsafe_allow_html=True,
+        )
+    elif suffix in {".png", ".jpg", ".jpeg"}:
+        st.image(str(path), use_column_width=True)
+    else:
+        st.info("Preview is not available for this file type.")
 
 # Ensure data initialized
 storage.initialize()
@@ -71,6 +106,28 @@ else:
             st.write(f"**ID:** {entry.get('id', 'N/A')}")
             st.write(f"**Created:** {entry.get('created_at', 'N/A')}")
             st.write(f"**Updated:** {entry.get('updated_at', 'N/A')}")
+
+        current_certificate = certificate_file_path(entry.get("certificate_path", ""))
+        st.markdown("---")
+        st.subheader("Certificate")
+
+        if current_certificate:
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.caption(current_certificate.name)
+            with col2:
+                st.download_button(
+                    "Download File",
+                    data=current_certificate.read_bytes(),
+                    file_name=current_certificate.name,
+                    mime="application/octet-stream",
+                    use_container_width=True,
+                )
+
+            with st.expander("View Current File"):
+                render_certificate_preview(current_certificate)
+        else:
+            st.info("No certificate attached.")
         
         with st.form("ce_edit_form"):
             col1, col2 = st.columns(2)
@@ -105,6 +162,17 @@ else:
                 height=100,
                 value=entry.get("notes", "")
             )
+
+            st.markdown("---")
+            st.subheader("Manage Certificate")
+            replacement_certificate = st.file_uploader(
+                "Add or replace certificate",
+                type=["pdf", "png", "jpg", "jpeg"],
+            )
+            remove_certificate = st.checkbox(
+                "Remove current certificate",
+                disabled=not bool(entry.get("certificate_path", "")),
+            )
             
             col1, col2, col3 = st.columns(3)
             
@@ -136,6 +204,35 @@ else:
                 entry["hours"] = hours
                 entry["notes"] = notes
                 entry["updated_at"] = datetime.now().isoformat()
+
+                cert_mgr = CertificateManager(
+                    root_dir=Path("certificates/root"),
+                    backup_dir=Path("certificates/backup"),
+                )
+
+                if replacement_certificate:
+                    file_data = replacement_certificate.read()
+                    file_hash = compute_bytes_hash(file_data)
+                    cert_uuid = cert_mgr.store_certificate(
+                        file_data=file_data,
+                        original_filename=replacement_certificate.name,
+                        file_hash=file_hash,
+                        record_id=entry["id"],
+                    )
+
+                    if cert_uuid:
+                        cert_mgr.delete_certificate_by_path(entry.get("certificate_path", ""))
+                        entry["certificate_path"] = (
+                            f"certificates/root/{cert_uuid}{Path(replacement_certificate.name).suffix}"
+                        )
+                        entry["certificate_hash"] = file_hash
+                    else:
+                        st.error("Failed to store replacement certificate")
+                        st.stop()
+                elif remove_certificate:
+                    cert_mgr.delete_certificate_by_path(entry.get("certificate_path", ""))
+                    entry["certificate_path"] = ""
+                    entry["certificate_hash"] = ""
                 
                 success = storage.write_record(entry)
                 
@@ -147,6 +244,10 @@ else:
             
             if deleted:
                 # Delete entry
+                CertificateManager(
+                    root_dir=Path("certificates/root"),
+                    backup_dir=Path("certificates/backup"),
+                ).delete_certificate_by_path(entry.get("certificate_path", ""))
                 success = storage.delete_record(entry["id"])
                 
                 if success:

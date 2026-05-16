@@ -6,12 +6,74 @@ import streamlit as st
 from pathlib import Path
 import sys
 import pandas as pd
+from io import BytesIO
+from zipfile import ZipFile, ZIP_DEFLATED
+import re
+import json
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.storage import Storage
 from utils.navigation import render_sidebar_nav
 from utils.storage import CATEGORY_LABELS
+
+
+def safe_filename(value: str) -> str:
+    """Create a readable filename segment for certificate exports."""
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", str(value)).strip("_")
+    return cleaned or "certificate"
+
+
+def build_certificate_zip(records: pd.DataFrame) -> tuple[bytes, int]:
+    """Build a ZIP containing certificate files attached to selected records."""
+    buffer = BytesIO()
+    files_added = 0
+
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as zip_file:
+        for _, record in records.iterrows():
+            certificate_path = record.get("certificate_path", "")
+            if not certificate_path:
+                continue
+
+            path = Path(certificate_path)
+            if not path.exists():
+                continue
+
+            date_part = safe_filename(record.get("date", "undated"))
+            title_part = safe_filename(record.get("title", "certificate"))
+            archive_name = f"{date_part}_{title_part}_{path.name}"
+            zip_file.write(path, archive_name)
+            files_added += 1
+
+    return buffer.getvalue(), files_added
+
+
+def attachment_filename(certificate_path: str) -> str:
+    """Return the original uploaded filename when metadata is available."""
+    if not certificate_path:
+        return ""
+
+    path = Path(certificate_path)
+    metadata_path = Path("certificates/metadata") / f"{path.stem}.json"
+
+    if metadata_path.exists():
+        try:
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+            return metadata.get("original_filename") or path.name
+        except Exception:
+            return path.name
+
+    return path.name
+
+
+def has_attachment(certificate_path: str) -> bool:
+    """Check whether a record points to an existing attachment file."""
+    if not certificate_path:
+        return False
+
+    path = Path(certificate_path)
+    return path.exists() or (Path("certificates/root") / path.name).exists()
 
 render_sidebar_nav("Data Viewer")
 st.title("🔍 Data Viewer")
@@ -83,15 +145,22 @@ else:
     st.subheader(f"Records: {len(filtered)}")
     
     if not filtered.empty:
-        display_df = filtered[["id", "date", "title", "category", "hours"]].copy()
+        display_df = filtered[["id", "date", "title", "category", "hours", "certificate_path"]].copy()
         display_df.insert(0, "selected", False)
         display_df["date"] = pd.to_datetime(display_df["date"]).dt.strftime("%Y-%m-%d")
+        display_df["has_attachments"] = display_df["certificate_path"].apply(
+            lambda value: "✅" if has_attachment(value) else "❌"
+        )
+        display_df["file_names"] = display_df["certificate_path"].apply(attachment_filename)
+        display_df = display_df[
+            ["selected", "id", "date", "title", "category", "hours", "has_attachments", "file_names"]
+        ]
 
         edited_df = st.data_editor(
             display_df,
             use_container_width=True,
             hide_index=True,
-            disabled=["date", "title", "category", "hours"],
+            disabled=["date", "title", "category", "hours", "has_attachments", "file_names"],
             column_config={
                 "selected": st.column_config.CheckboxColumn("Select"),
                 "id": None,
@@ -99,6 +168,14 @@ else:
                 "title": "Title",
                 "category": "Categories",
                 "hours": "Hours",
+                "has_attachments": st.column_config.TextColumn(
+                    "Has Attachments",
+                    width="small",
+                ),
+                "file_names": st.column_config.TextColumn(
+                    "Files",
+                    width="medium",
+                ),
             },
             key="record_selection_table",
         )
@@ -139,7 +216,7 @@ else:
 
     # Actions
     st.markdown("---")
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4, col5 = st.columns(5)
 
     with col1:
         if st.button("✏️ Edit Selected", disabled=len(selected_ids) != 1, use_container_width=True):
@@ -152,6 +229,20 @@ else:
             st.rerun()
 
     with col3:
+        selected_records = filtered[filtered["id"].isin(selected_ids)] if selected_ids else pd.DataFrame()
+        zip_data, file_count = build_certificate_zip(selected_records) if selected_ids else (b"", 0)
+        st.download_button(
+            "📎 Download Files",
+            data=zip_data,
+            file_name="ce_certificates.zip",
+            mime="application/zip",
+            disabled=file_count == 0,
+            use_container_width=True,
+        )
+        if selected_ids and file_count == 0:
+            st.caption("No attached files for selected rows.")
+
+    with col4:
         if st.button("📄 Export to CSV", use_container_width=True):
             csv = filtered.to_csv(index=False)
             st.download_button(
@@ -161,6 +252,6 @@ else:
                 mime="text/csv"
             )
 
-    with col4:
+    with col5:
         if st.button("🔄 Refresh", use_container_width=True):
             st.rerun()

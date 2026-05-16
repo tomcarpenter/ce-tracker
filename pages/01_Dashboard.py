@@ -8,6 +8,7 @@ from pathlib import Path
 import sys
 from datetime import datetime
 import json
+import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -123,19 +124,50 @@ else:
 st.markdown("---")
 
 # PMH-C helper
-col1, col2 = st.columns([3, 1])
+st.subheader("💡 PMH-C Submission Helper")
+
+col1, col2 = st.columns([1, 1])
 with col1:
-    st.subheader("💡 PMH-C Submission Helper")
-with col2:
-    if st.button("Open Form →", use_container_width=True):
-        st.markdown(
-            "[Open PMH-C JotForm](https://form.jotform.com/231702468692057)"
+    if st.button("Generate PMH-C Copy Text", use_container_width=True):
+        if not ce_data.empty and "is_pmhc" in ce_data.columns:
+            pmhc_records = ce_data[ce_data["is_pmhc"].fillna(0).astype(bool)]
+        else:
+            pmhc_records = ce_data
+        course_lines = []
+
+        if not pmhc_records.empty:
+            pmhc_records = pmhc_records.sort_values("date")
+            for _, record in pmhc_records.iterrows():
+                completed = pd.to_datetime(record.get("date")).strftime("%Y-%m-%d")
+                course_lines.append(
+                    f"- {completed}: {record.get('title', 'Untitled')} ({record.get('hours', 0)} hours)"
+                )
+
+        courses_text = "\n".join(course_lines) if course_lines else "- Add PMH-C course names and completion dates here."
+        st.session_state.pmhc_helper_text = (
+            "Training/Course Names: Please include the date each CE course was completed. "
+            "If a certificate does not include the date, please also upload a receipt/confirmation "
+            "of the date for the course.\n\n"
+            f"{courses_text}\n\n"
+            "PMH-C form: https://form.jotform.com/231702468692057\n"
+            "Reminder: verify the current form link before submitting."
         )
 
-st.markdown("""
-**Note:** PMH-C requires course completion dates. Please include a receipt/confirmation 
-if the certificate does not display the date.
-""")
+with col2:
+    st.link_button(
+        "Open PMH-C Form",
+        "https://form.jotform.com/231702468692057",
+        use_container_width=True,
+    )
+
+if st.session_state.get("pmhc_helper_text"):
+    st.text_area(
+        "Copy-ready PMH-C text",
+        value=st.session_state.pmhc_helper_text,
+        height=220,
+    )
+else:
+    st.caption("Generate copy-ready text for PMH-C course submission details.")
 
 # Risk alerts
 st.subheader("⚠️ Alerts & Notifications")
