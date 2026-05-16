@@ -4,6 +4,7 @@ from io import BytesIO
 from pathlib import Path
 import json
 import re
+import shutil
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pandas as pd
@@ -125,6 +126,33 @@ def build_ce_zip(records: pd.DataFrame, folder_per_record: bool = False) -> tupl
                 file_count += 1
 
     return buffer.getvalue(), record_count, file_count
+
+
+def write_ce_folders(records: pd.DataFrame, destination_dir: Path) -> tuple[int, int]:
+    """
+    Write one folder per CE record with details text and certificate file.
+
+    Returns: (records exported, certificate files exported)
+    """
+    destination_dir.mkdir(parents=True, exist_ok=True)
+    record_count = 0
+    file_count = 0
+    used_bases: set[str] = set()
+
+    for _, record in records.iterrows():
+        base = _unique_name(ce_basename(record), used_bases)
+        record_dir = destination_dir / base
+        record_dir.mkdir(parents=True, exist_ok=True)
+
+        (record_dir / f"{base}.txt").write_text(record_details_text(record), encoding="utf-8")
+        record_count += 1
+
+        cert_path = certificate_path(record)
+        if cert_path:
+            shutil.copy2(cert_path, record_dir / f"{base}{cert_path.suffix}")
+            file_count += 1
+
+    return record_count, file_count
 
 
 def _unique_name(name: str, used_names: set[str]) -> str:

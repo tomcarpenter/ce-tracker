@@ -5,6 +5,7 @@ Data Viewer page - Browse, filter, and inspect CE records.
 import streamlit as st
 from pathlib import Path
 import sys
+import base64
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -12,7 +13,23 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.storage import Storage
 from utils.navigation import render_sidebar_nav
 from utils.storage import CATEGORY_LABELS
-from utils.ce_export import attachment_filename, build_ce_zip, has_attachment
+from utils.ce_export import attachment_filename, build_ce_zip, certificate_path, has_attachment
+
+
+def render_file_preview(path: Path) -> None:
+    """Render a lightweight preview for the selected row's attachment."""
+    suffix = path.suffix.lower()
+
+    if suffix == ".pdf":
+        encoded_pdf = base64.b64encode(path.read_bytes()).decode("utf-8")
+        st.markdown(
+            f'<iframe src="data:application/pdf;base64,{encoded_pdf}" width="100%" height="520"></iframe>',
+            unsafe_allow_html=True,
+        )
+    elif suffix in {".png", ".jpg", ".jpeg"}:
+        st.image(str(path), use_column_width=True)
+    else:
+        st.info("Preview is not available for this file type.")
 
 render_sidebar_nav("Data Viewer")
 st.title("🔍 Data Viewer")
@@ -85,23 +102,22 @@ else:
     
     if not filtered.empty:
         display_df = filtered[["id", "date", "title", "category", "hours", "certificate_path"]].copy()
-        display_df.insert(0, "selected", False)
         display_df["date"] = pd.to_datetime(display_df["date"]).dt.strftime("%Y-%m-%d")
         display_df["has_attachments"] = display_df["certificate_path"].apply(
             lambda value: "✅" if has_attachment(value) else "❌"
         )
         display_df["file_names"] = display_df["certificate_path"].apply(attachment_filename)
         display_df = display_df[
-            ["selected", "id", "date", "title", "category", "hours", "has_attachments", "file_names"]
+            ["id", "date", "title", "category", "hours", "has_attachments", "file_names"]
         ]
 
-        edited_df = st.data_editor(
+        selection = st.dataframe(
             display_df,
             use_container_width=True,
             hide_index=True,
-            disabled=["date", "title", "category", "hours", "has_attachments", "file_names"],
+            on_select="rerun",
+            selection_mode="single-row",
             column_config={
-                "selected": st.column_config.CheckboxColumn("Select"),
                 "id": None,
                 "date": "Date",
                 "title": "Title",
@@ -119,9 +135,8 @@ else:
             key="record_selection_table",
         )
 
-        selected_ids = edited_df.loc[edited_df["selected"], "id"].tolist()
-        if len(selected_ids) > 1:
-            st.warning("Select one row at a time before editing or deleting.")
+        selected_rows = selection.selection.rows
+        selected_ids = [display_df.iloc[selected_rows[0]]["id"]] if selected_rows else []
     else:
         selected_ids = []
         st.info("No records match the selected filters.")
@@ -153,6 +168,30 @@ else:
                 st.session_state.pop("pending_delete_id", None)
                 st.rerun()
 
+    selected_records = filtered[filtered["id"].isin(selected_ids)] if selected_ids else pd.DataFrame()
+
+    if len(selected_records) == 1:
+        selected_record = selected_records.iloc[0]
+        selected_file = certificate_path(selected_record)
+
+        with st.expander("View Current File", expanded=False):
+            if selected_file:
+                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.caption(selected_file.name)
+                with col2:
+                    st.download_button(
+                        "Download File",
+                        data=selected_file.read_bytes(),
+                        file_name=selected_file.name,
+                        mime="application/octet-stream",
+                        use_container_width=True,
+                    )
+
+                render_file_preview(selected_file)
+            else:
+                st.info("No attachment is available for the selected row.")
+
     # Actions
     st.markdown("---")
     col1, col2, col3, col4, col5 = st.columns(5)
@@ -168,7 +207,6 @@ else:
             st.rerun()
 
     with col3:
-        selected_records = filtered[filtered["id"].isin(selected_ids)] if selected_ids else pd.DataFrame()
         zip_data, record_count, file_count = build_ce_zip(selected_records) if selected_ids else (b"", 0, 0)
         st.download_button(
             "📎 Download CE Packet",

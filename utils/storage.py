@@ -10,6 +10,8 @@ from typing import Optional, Dict, Any
 import json
 import shutil
 
+from utils.ce_export import write_ce_folders
+
 
 CATEGORY_FLAG_COLUMNS = [
     "is_lmhc_general",
@@ -40,9 +42,10 @@ class Storage:
         self.backup_dir = Path(backup_dir) if backup_dir else self._configured_backup_dir()
         self.backup_parquet_path = self.backup_dir / "ce_records.parquet"
         self.backup_audit_log_path = self.backup_dir / "audit_log.csv"
+        self.backup_events_dir = self.backup_dir / "events"
         self.initialized = False
         
-        self.data_dir.mkdir(exist_ok=True)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
     
     def initialize(self) -> None:
@@ -171,6 +174,10 @@ class Storage:
             self.backup_dir.mkdir(parents=True, exist_ok=True)
             if self.parquet_path.exists():
                 shutil.copy2(self.parquet_path, self.backup_parquet_path)
+                backup_records = self.load_parquet()
+                if self.backup_events_dir.exists():
+                    shutil.rmtree(self.backup_events_dir)
+                write_ce_folders(backup_records, self.backup_events_dir)
             if self.audit_log_path.exists():
                 shutil.copy2(self.audit_log_path, self.backup_audit_log_path)
             return True
@@ -186,6 +193,7 @@ class Storage:
             "backup_exists": self.backup_parquet_path.exists(),
             "local_rows": local_rows,
             "backup_rows": backup_rows,
+            "event_folders": len(list(self.backup_events_dir.iterdir())) if self.backup_events_dir.exists() else 0,
             "in_sync": self.backup_parquet_path.exists() and local_rows == backup_rows,
         }
 

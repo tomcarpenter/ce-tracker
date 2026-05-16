@@ -27,8 +27,8 @@ The app will open automatically at `http://localhost:8501`
 
 **Data Model:**
 - **Parquet** (`data/ce_records.parquet`) = Source of truth
-- **Backup Parquet** (`backup_data/ce_records.parquet` by default) = separate-folder mirror
-- **Certificates** = Dual storage (root + backup) with SHA256 hashing
+- **Backup Folder** (`backup_data/` by default) = `ce_records.parquet` plus per-event folders
+- **Certificates** = UUID-named local storage with SHA256 hashing
 - **Audit Log** = Append-only change tracking
 
 **Runtime:**
@@ -65,7 +65,13 @@ ce_tracker/
 │   ├── root/                   # Primary storage
 │   ├── backup/                 # Mirror storage
 │   └── metadata/               # Certificate metadata
-└── backup_data/                # Backup data mirror
+└── backup_data/                # Backup mirror
+    ├── ce_records.parquet
+    ├── audit_log.csv
+    └── events/
+        └── ce_YYYY-MM-DD_Event_Name/
+            ├── ce_YYYY-MM-DD_Event_Name.txt
+            └── ce_YYYY-MM-DD_Event_Name.pdf
 ```
 
 ## Features
@@ -89,10 +95,10 @@ Submission categories are stored as independent 1/0 flags. Ethics and Roles cann
 
 ### Data Safety
 - Write-to-Parquet-first pattern (rollback on failure)
-- Separate-folder backup mirror
+- Automatic separate-folder backup mirror
 - Append-only audit log
 - Certificate hashing + UUID naming
-- Dual-location backup
+- Per-event evidence folders in backup
 
 ## Dependencies
 
@@ -114,9 +120,9 @@ Visit Settings page to configure:
 - PMH-C cycle start date
 
 ### Backup Configuration
-- Set external data backup folder (e.g., iCloud Drive)
-- Set external certificate backup folder
-- App automatically mirrors files during sync
+- Choose a data backup folder with the Settings folder picker
+- App automatically updates the backup after submissions, edits, and deletes
+- Backup contains a parent Parquet file and an `events/` folder with one subfolder per CE event
 
 ### PMH-C Submissions
 Get helper text and form link on Dashboard page:
@@ -126,7 +132,7 @@ Get helper text and form link on Dashboard page:
 
 ## Data Recovery
 
-If local data is damaged, use Settings to restore from the backup data file.
+The backup folder keeps a copy of `ce_records.parquet` plus human-readable event folders for recovery/reference.
 
 ## Troubleshooting
 
@@ -150,8 +156,8 @@ streamlit run app.py
 
 ### Data sync issues
 - Visit Settings page
-- Click "Sync Backup Now"
 - Confirm the data backup folder path is available
+- Save settings to refresh the automatic backup mirror
 
 ## Notes
 
