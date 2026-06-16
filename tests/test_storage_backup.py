@@ -2,6 +2,7 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+import json
 
 from utils.storage import Storage
 
@@ -17,6 +18,39 @@ class StorageBackupTests(unittest.TestCase):
             self.assertTrue((backup_root / "ce_records.parquet").exists())
             self.assertTrue((backup_root / "ce_records.csv").exists())
             self.assertTrue((backup_root / "events").is_dir())
+
+    def test_backup_includes_settings_file_when_present(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            data_dir = root / "data"
+            backup_dir = root / "backup"
+            data_dir.mkdir()
+            settings = {
+                "lmhc_start": "2025-08-01",
+                "data_backup_path": str(backup_dir),
+            }
+            (data_dir / "settings.json").write_text(json.dumps(settings))
+
+            storage = Storage(data_dir=str(data_dir), backup_dir=str(backup_dir))
+            storage.initialize()
+
+            backed_up_settings = backup_dir / "settings.json"
+            self.assertTrue(backed_up_settings.exists())
+            self.assertEqual(json.loads(backed_up_settings.read_text()), settings)
+
+    def test_configured_backup_dir_is_read_from_selected_data_dir(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            data_dir = root / "custom-data"
+            backup_dir = root / "custom-backup"
+            data_dir.mkdir()
+            (data_dir / "settings.json").write_text(
+                json.dumps({"data_backup_path": str(backup_dir)})
+            )
+
+            storage = Storage(data_dir=str(data_dir))
+
+            self.assertEqual(storage.backup_dir, backup_dir)
 
     def test_backup_contains_parquet_and_event_folder_after_write(self):
         with tempfile.TemporaryDirectory() as tmpdir:

@@ -10,10 +10,10 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.storage import Storage
 from utils.navigation import render_sidebar_nav
 from utils.storage import CATEGORY_LABELS
 from utils.ce_export import attachment_filename, build_ce_zip, certificate_path, has_attachment
+from utils.app_config import configured_storage
 
 
 def render_file_preview(path: Path) -> None:
@@ -34,7 +34,7 @@ def render_file_preview(path: Path) -> None:
 render_sidebar_nav("Data Viewer")
 st.title("🔍 Data Viewer")
 
-storage = st.session_state.get("storage") or Storage()
+storage = st.session_state.get("storage") or configured_storage()
 
 # Ensure data initialized
 storage.initialize()

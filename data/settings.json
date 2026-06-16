@@ -1,7 +1,15 @@
 {
-  "lmhc_start": "2025-08-01",
-  "suicide_start": "2023-01-26",
-  "equity_start": "2025-01-03",
-  "pmhc_start": "2026-01-08",
-  "data_backup_path": "/Users/thomascarpenter/Desktop/testbackup/"
+  "lmhc_start": "2024-07-15",
+  "suicide_start": "2020-07-15",
+  "equity_start": "2022-07-15",
+  "pmhc_start": "2026-07-15",
+  "data_backup_path": "/Users/thomascarpenter/Library/Mobile Documents/com~apple~CloudDocs/Shared T and G New/Grace CEs/",
+  "requirements": {
+    "LMHC": 32.0,
+    "Ethics": 6.0,
+    "Roles": 2.0,
+    "Suicide": 6.0,
+    "Equity": 2.0,
+    "PMH-C": 12.0
+  }
 }

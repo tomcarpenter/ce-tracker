@@ -27,6 +27,7 @@ env/
 *.streamlit.cache/
 
 # Data (gitignore actual records, keep structure)
+app_config.json
 data/ce_records.parquet
 data/ce_records.csv
 data/audit_log.csv

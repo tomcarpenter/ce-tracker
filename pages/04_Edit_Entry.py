@@ -11,16 +11,16 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.storage import Storage
 from utils.compliance import ComplianceTracker
 from utils.navigation import render_sidebar_nav
 from utils.file_manager import CertificateManager
 from utils.hashing import compute_bytes_hash
+from utils.app_config import configured_storage
 
 render_sidebar_nav("Edit Entry")
 st.title("✏️ Edit CE Entry")
 
-storage = st.session_state.get("storage") or Storage()
+storage = st.session_state.get("storage") or configured_storage()
 tracker = st.session_state.get("tracker") or ComplianceTracker(storage)
 
 CATEGORY_OPTIONS = [

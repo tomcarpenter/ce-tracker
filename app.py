@@ -7,7 +7,7 @@ import streamlit as st
 sys.path.insert(0, str(Path(__file__).parent))
 
 from utils.compliance import ComplianceTracker
-from utils.storage import Storage
+from utils.app_config import configured_storage
 
 st.set_page_config(
     page_title="CE Tracker",
@@ -18,7 +18,7 @@ st.set_page_config(
 
 # Initialize session state
 if "storage" not in st.session_state:
-    st.session_state.storage = Storage()
+    st.session_state.storage = configured_storage()
 
 if "tracker" not in st.session_state:
     st.session_state.tracker = ComplianceTracker(st.session_state.storage)

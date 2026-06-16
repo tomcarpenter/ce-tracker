@@ -15,17 +15,25 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from utils.storage import Storage
 from utils.compliance import ComplianceTracker
 from utils.navigation import render_sidebar_nav
+from utils.app_config import configured_storage, save_app_config
 
 render_sidebar_nav("Settings")
 st.title("⚙️ Settings")
 
-storage = st.session_state.get("storage") or Storage()
+selected_data_folder = st.session_state.pop("selected_data_folder", None)
+if selected_data_folder:
+    save_app_config({"data_dir": selected_data_folder})
+    st.session_state.data_dir = selected_data_folder
+    st.session_state.pop("storage", None)
+    st.session_state.pop("tracker", None)
+
+storage = st.session_state.get("storage") or configured_storage()
 
 # Ensure data initialized
 storage.initialize()
 
 # Settings file location
-settings_file = Path("data/settings.json")
+settings_file = storage.settings_path
 
 # Load existing settings
 def load_settings():
@@ -46,19 +54,20 @@ def load_settings():
 
     return defaults
 
-def save_settings(settings):
-    with open(settings_file, "w") as f:
+def save_settings(settings, target_settings_file: Path = settings_file):
+    target_settings_file.parent.mkdir(parents=True, exist_ok=True)
+    with open(target_settings_file, "w") as f:
         json.dump(settings, f, indent=2)
 
 settings = load_settings()
 
 
-def choose_backup_folder() -> str | None:
-    """Open a local folder picker for the backup destination."""
+def choose_folder(prompt: str) -> str | None:
+    """Open a local folder picker."""
     if platform.system() == "Darwin":
         script = (
             'POSIX path of (choose folder with prompt '
-            '"Choose CE Tracker backup folder")'
+            f'"{prompt}")'
         )
         try:
             result = subprocess.run(
@@ -84,7 +93,7 @@ def choose_backup_folder() -> str | None:
         root = tk.Tk()
         root.withdraw()
         root.attributes("-topmost", True)
-        folder = filedialog.askdirectory(title="Choose CE Tracker backup folder")
+        folder = filedialog.askdirectory(title=prompt)
         root.destroy()
         return folder or None
     except Exception as exc:
@@ -174,7 +183,10 @@ with col3:
 st.markdown("---")
 
 # Backup locations
-st.subheader("Backup Configuration")
+st.subheader("Storage Locations")
+
+if "data_dir" not in st.session_state:
+    st.session_state.data_dir = str(storage.data_dir)
 
 if "data_backup_path" not in st.session_state:
     st.session_state.data_backup_path = (
@@ -184,25 +196,43 @@ if "data_backup_path" not in st.session_state:
 if st.session_state.get("selected_backup_folder"):
     st.session_state.data_backup_path = st.session_state.pop("selected_backup_folder")
 
-col1, col2 = st.columns([3, 1])
+data_col1, data_col2 = st.columns([3, 1])
 
-with col1:
+with data_col1:
+    data_dir = st.text_input(
+        "Data Folder",
+        key="data_dir",
+        help="The app will read and write ce_records.parquet, audit_log.csv, and settings.json in this folder"
+    )
+
+with data_col2:
+    st.write("")
+    st.write("")
+    if st.button("Browse...", key="browse_data_dir", use_container_width=True):
+        selected_folder = choose_folder("Choose CE Tracker data folder")
+        if selected_folder:
+            st.session_state.selected_data_folder = selected_folder
+            st.rerun()
+
+backup_col1, backup_col2 = st.columns([3, 1])
+
+with backup_col1:
     data_backup_path = st.text_input(
         "Data Backup Folder",
         key="data_backup_path",
-        help="The app will maintain ce_records.parquet and event folders in this location"
+        help="The app will maintain records, settings, and event folders in this location"
     )
 
-with col2:
+with backup_col2:
     st.write("")
     st.write("")
-    if st.button("Browse...", use_container_width=True):
-        selected_folder = choose_backup_folder()
+    if st.button("Browse...", key="browse_backup_dir", use_container_width=True):
+        selected_folder = choose_folder("Choose CE Tracker backup folder")
         if selected_folder:
             st.session_state.selected_backup_folder = selected_folder
             st.rerun()
 
-st.caption("Backup is automatic after submissions, edits, and deletes. The folder contains ce_records.parquet plus an events folder with one subfolder per CE event.")
+st.caption("The data folder is the source of truth. Backup is automatic after submissions, edits, deletes, and settings changes. The backup folder contains ce_records.parquet, settings.json, and an events folder with one subfolder per CE event.")
 
 st.markdown("---")
 
@@ -211,7 +241,7 @@ st.subheader("Backup Status")
 ce_data = storage.load_parquet()
 backup_status = storage.backup_status()
 
-col1, col2, col3 = st.columns(3)
+col1, col2, col3, col4 = st.columns(4)
 
 with col1:
     st.metric("Local Records", len(ce_data))
@@ -222,19 +252,24 @@ with col2:
 with col3:
     st.metric("Event Folders", backup_status["event_folders"])
 
+with col4:
+    st.metric("Settings Backup", "Yes" if backup_status["settings_backed_up"] else "No")
+
 st.markdown("---")
 
 if st.button("📊 View Audit Log", use_container_width=True):
-    if Path("data/audit_log.csv").exists():
+    if storage.audit_log_path.exists():
         import pandas as pd
-        audit = pd.read_csv("data/audit_log.csv")
+        audit = pd.read_csv(storage.audit_log_path)
         st.dataframe(audit.tail(20), use_container_width=True)
 
 st.markdown("---")
 
 # Save settings
 if st.button("💾 Save All Settings", type="primary", use_container_width=True):
+    next_storage = Storage(data_dir=data_dir, backup_dir=data_backup_path)
     new_settings = {
+        "data_dir": data_dir,
         "lmhc_start": str(lmhc_start),
         "suicide_start": str(suicide_start),
         "equity_start": str(equity_start),
@@ -249,7 +284,12 @@ if st.button("💾 Save All Settings", type="primary", use_container_width=True)
             "PMH-C": pmhc_required,
         },
     }
-    save_settings(new_settings)
-    st.session_state.storage = Storage(backup_dir=data_backup_path)
+    save_app_config({"data_dir": data_dir})
+    save_settings(new_settings, next_storage.settings_path)
+    st.session_state.storage = next_storage
     st.session_state.storage.initialize()
+    st.session_state.tracker = ComplianceTracker(
+        st.session_state.storage,
+        requirements=new_settings["requirements"],
+    )
     st.success("✓ Settings saved successfully")
