@@ -41,6 +41,10 @@ class Storage:
         self.audit_log_path = self.data_dir / "audit_log.csv"
         self.settings_path = self.data_dir / "settings.json"
         self.backup_dir = Path(backup_dir) if backup_dir else self._configured_backup_dir()
+        self.certificate_root_dir = self.data_dir / "certificates" / "root"
+        self.certificate_metadata_dir = self.data_dir / "certificates" / "metadata"
+        self.backup_certificate_root_dir = self.backup_dir / "certificates" / "root"
+        self.backup_certificate_metadata_dir = self.backup_dir / "certificates" / "metadata"
         self.backup_parquet_path = self.backup_dir / "ce_records.parquet"
         self.backup_csv_path = self.backup_dir / "ce_records.csv"
         self.backup_audit_log_path = self.backup_dir / "audit_log.csv"
@@ -50,6 +54,10 @@ class Storage:
         
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.backup_dir.mkdir(parents=True, exist_ok=True)
+        self.certificate_root_dir.mkdir(parents=True, exist_ok=True)
+        self.certificate_metadata_dir.mkdir(parents=True, exist_ok=True)
+        self.backup_certificate_root_dir.mkdir(parents=True, exist_ok=True)
+        self.backup_certificate_metadata_dir.mkdir(parents=True, exist_ok=True)
     
     def initialize(self) -> None:
         """Initialize data files if they don't exist."""
@@ -63,6 +71,7 @@ class Storage:
             ])
             audit_df.to_csv(self.audit_log_path, index=False)
 
+        self._migrate_legacy_certificates()
         self.sync_backup()
         
         self.initialized = True
@@ -181,11 +190,17 @@ class Storage:
                 backup_records.to_csv(self.backup_csv_path, index=False)
                 if self.backup_events_dir.exists():
                     shutil.rmtree(self.backup_events_dir)
-                write_ce_folders(backup_records, self.backup_events_dir)
+                write_ce_folders(
+                    backup_records,
+                    self.backup_events_dir,
+                    certificate_root_dir=self.certificate_root_dir,
+                    metadata_dir=self.certificate_metadata_dir,
+                )
             if self.audit_log_path.exists():
                 shutil.copy2(self.audit_log_path, self.backup_audit_log_path)
             if self.settings_path.exists():
                 shutil.copy2(self.settings_path, self.backup_settings_path)
+            self._sync_certificate_backup()
             return True
         except Exception:
             return False
@@ -201,8 +216,117 @@ class Storage:
             "backup_rows": backup_rows,
             "event_folders": len(list(self.backup_events_dir.iterdir())) if self.backup_events_dir.exists() else 0,
             "settings_backed_up": self.backup_settings_path.exists(),
+            "certificates": len(list(self.certificate_root_dir.iterdir())) if self.certificate_root_dir.exists() else 0,
+            "backup_certificates": len(list(self.backup_certificate_root_dir.iterdir())) if self.backup_certificate_root_dir.exists() else 0,
             "in_sync": self.backup_parquet_path.exists() and local_rows == backup_rows,
         }
+
+    def certificate_manager(self):
+        from utils.file_manager import CertificateManager
+
+        return CertificateManager(
+            root_dir=self.certificate_root_dir,
+            backup_dir=self.backup_certificate_root_dir,
+            backup_metadata_dir=self.backup_certificate_metadata_dir,
+        )
+
+    def resolve_certificate_path(self, certificate_path: str) -> Path | None:
+        if not certificate_path:
+            return None
+
+        path = Path(certificate_path)
+        if path.exists():
+            return path
+
+        for base_dir in [
+            self.certificate_root_dir,
+            self.backup_certificate_root_dir,
+            Path("certificates/root"),
+        ]:
+            candidate = base_dir / path.name
+            if candidate.exists():
+                return candidate
+
+        return None
+
+    def attachment_filename(self, certificate_path: str) -> str:
+        if not certificate_path:
+            return ""
+
+        path = Path(certificate_path)
+        for metadata_dir in [
+            self.certificate_metadata_dir,
+            self.backup_certificate_metadata_dir,
+            Path("certificates/metadata"),
+        ]:
+            metadata_path = metadata_dir / f"{path.stem}.json"
+            if metadata_path.exists():
+                try:
+                    with open(metadata_path, "r") as f:
+                        metadata = json.load(f)
+                    return metadata.get("original_filename") or path.name
+                except Exception:
+                    return path.name
+
+        return path.name
+
+    def has_attachment(self, certificate_path: str) -> bool:
+        return self.resolve_certificate_path(certificate_path) is not None
+
+    def _sync_certificate_backup(self) -> None:
+        for source_dir, destination_dir in [
+            (self.certificate_root_dir, self.backup_certificate_root_dir),
+            (self.certificate_metadata_dir, self.backup_certificate_metadata_dir),
+        ]:
+            if source_dir.resolve() == destination_dir.resolve():
+                continue
+            if destination_dir.exists():
+                shutil.rmtree(destination_dir)
+            if source_dir.exists():
+                destination_dir.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copytree(source_dir, destination_dir)
+            else:
+                destination_dir.mkdir(parents=True, exist_ok=True)
+
+    def _migrate_legacy_certificates(self) -> None:
+        legacy_root = Path("certificates/root")
+        legacy_metadata = Path("certificates/metadata")
+        if not legacy_root.exists() and not legacy_metadata.exists():
+            return
+
+        for source_dir, destination_dir in [
+            (legacy_root, self.certificate_root_dir),
+            (legacy_metadata, self.certificate_metadata_dir),
+        ]:
+            if not source_dir.exists():
+                continue
+            destination_dir.mkdir(parents=True, exist_ok=True)
+            for source in source_dir.iterdir():
+                if source.is_file():
+                    destination = destination_dir / source.name
+                    if not destination.exists():
+                        shutil.copy2(source, destination)
+
+        if not self.parquet_path.exists():
+            return
+
+        records = self.load_parquet()
+        if records.empty or "certificate_path" not in records.columns:
+            return
+
+        changed = False
+        for index, record in records.iterrows():
+            current_path = record.get("certificate_path", "")
+            if not current_path:
+                continue
+            filename = Path(current_path).name
+            new_path = self.certificate_root_dir / filename
+            if new_path.exists() and current_path != str(new_path):
+                records.at[index, "certificate_path"] = str(new_path)
+                changed = True
+
+        if changed:
+            records.to_parquet(self.parquet_path, index=False)
 
     @staticmethod
     def _normalize_for_compare(df: pd.DataFrame) -> pd.DataFrame:

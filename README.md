@@ -29,8 +29,8 @@ The app will open automatically at `http://localhost:8501`
 - **App Pointer** (`app_config.json`, local/ignored) = Selected data folder path
 - **Parquet** (`ce_records.parquet` inside the selected data folder) = Source of truth
 - **Settings** (`settings.json` inside the selected data folder) = Compliance settings plus selected backup folder path
-- **Backup Folder** (`backup_data/` by default, user-selectable) = `ce_records.parquet`, `settings.json`, audit log, and per-event folders
-- **Certificates** = UUID-named local storage with SHA256 hashing
+- **Certificates** (`certificates/` inside the selected data folder) = UUID-named local storage with SHA256 hashing
+- **Backup Folder** (`backup_data/` by default, user-selectable) = records, settings, audit log, certificates, metadata, and per-event folders
 - **Audit Log** = Append-only change tracking
 
 **Runtime:**
@@ -60,21 +60,28 @@ ce_tracker/
 │   ├── hashing.py              # SHA256 verification
 │   ├── sync.py                 # File mirroring
 │   └── file_manager.py         # Certificate storage
-├── tests/                      # Regression tests for exports/backups
-├── data/
-│   ├── ce_records.parquet      # Primary storage
-│   └── audit_log.csv           # Append-only log
+└── tests/                      # Regression tests for exports/backups
+
+selected_data_folder/
+├── ce_records.parquet          # Primary storage
+├── audit_log.csv               # Append-only log
+├── settings.json               # Compliance + backup settings
+└── certificates/
+    ├── root/                   # Primary certificate files
+    └── metadata/               # Certificate metadata
+
+selected_backup_folder/
+├── ce_records.parquet
+├── ce_records.csv
+├── audit_log.csv
+├── settings.json
 ├── certificates/
-│   ├── root/                   # Primary storage
-│   ├── backup/                 # Mirror storage
-│   └── metadata/               # Certificate metadata
-└── backup_data/                # Backup mirror
-    ├── ce_records.parquet
-    ├── audit_log.csv
-    └── events/
-        └── ce_YYYY-MM-DD_Event_Name/
-            ├── ce_YYYY-MM-DD_Event_Name.txt
-            └── ce_YYYY-MM-DD_Event_Name.pdf
+│   ├── root/
+│   └── metadata/
+└── events/
+    └── ce_YYYY-MM-DD_Event_Name/
+        ├── ce_YYYY-MM-DD_Event_Name.txt
+        └── ce_YYYY-MM-DD_Event_Name.pdf
 ```
 
 ## Features
@@ -128,7 +135,7 @@ Visit Settings page to configure:
 - The repo-local `app_config.json` points the app at the selected data folder
 - The selected data folder contains `settings.json`, which points to the selected backup folder
 - App automatically updates the backup after submissions, edits, and deletes
-- Backup contains `ce_records.parquet`, `settings.json`, the audit log, and an `events/` folder with one subfolder per CE event
+- Backup contains `ce_records.parquet`, `settings.json`, the audit log, certificates, certificate metadata, and an `events/` folder with one subfolder per CE event
 
 ### PMH-C Submissions
 Get helper text and form link on Dashboard page:
@@ -168,7 +175,7 @@ streamlit run app.py
 ## Notes
 
 - This is a single-user, local-first application
-- All data stored locally in `data/` directory
+- User data is stored in the selected data folder, outside the repo if you choose
 - No external services required
 - Requires Python 3.8+
 - Mac-optimized but portable to Linux/Windows

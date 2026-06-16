@@ -14,17 +14,23 @@ import shutil
 class CertificateManager:
     """Manage certificate storage with UUID naming and metadata."""
     
-    def __init__(self, root_dir: Path = Path("certificates/root"), 
-                 backup_dir: Optional[Path] = None):
+    def __init__(self, root_dir: Path,
+                 backup_dir: Optional[Path] = None,
+                 backup_metadata_dir: Optional[Path] = None):
         self.root_dir = Path(root_dir)
         self.backup_dir = Path(backup_dir) if backup_dir else None
         self.metadata_dir = self.root_dir.parent / "metadata"
+        self.backup_metadata_dir = Path(backup_metadata_dir) if backup_metadata_dir else (
+            self.backup_dir.parent / "metadata" if self.backup_dir else None
+        )
         
         self.root_dir.mkdir(parents=True, exist_ok=True)
         self.metadata_dir.mkdir(parents=True, exist_ok=True)
         
         if self.backup_dir:
             self.backup_dir.mkdir(parents=True, exist_ok=True)
+        if self.backup_metadata_dir:
+            self.backup_metadata_dir.mkdir(parents=True, exist_ok=True)
     
     def store_certificate(self, file_data: bytes, original_filename: str, 
                          file_hash: str, record_id: str) -> Optional[str]:
@@ -62,6 +68,11 @@ class CertificateManager:
             metadata_path = self.metadata_dir / f"{cert_uuid}.json"
             with open(metadata_path, "w") as f:
                 json.dump(metadata, f, indent=2)
+
+            if self.backup_metadata_dir:
+                backup_metadata_path = self.backup_metadata_dir / f"{cert_uuid}.json"
+                with open(backup_metadata_path, "w") as f:
+                    json.dump(metadata, f, indent=2)
             
             return cert_uuid
         
@@ -76,7 +87,11 @@ class CertificateManager:
             metadata_path = self.metadata_dir / f"{cert_uuid}.json"
             
             if not metadata_path.exists():
-                return None
+                if not self.backup_metadata_dir:
+                    return None
+                metadata_path = self.backup_metadata_dir / f"{cert_uuid}.json"
+                if not metadata_path.exists():
+                    return None
             
             with open(metadata_path, "r") as f:
                 metadata = json.load(f)
@@ -106,7 +121,11 @@ class CertificateManager:
             metadata_path = self.metadata_dir / f"{cert_uuid}.json"
             
             if not metadata_path.exists():
-                return None
+                if not self.backup_metadata_dir:
+                    return None
+                metadata_path = self.backup_metadata_dir / f"{cert_uuid}.json"
+                if not metadata_path.exists():
+                    return None
             
             with open(metadata_path, "r") as f:
                 return json.load(f)
@@ -145,9 +164,12 @@ class CertificateManager:
                 if candidate.exists():
                     candidate.unlink()
 
-            metadata_path = self.metadata_dir / f"{cert_uuid}.json"
-            if metadata_path.exists():
-                metadata_path.unlink()
+            for metadata_dir in [self.metadata_dir, self.backup_metadata_dir]:
+                if not metadata_dir:
+                    continue
+                metadata_path = Path(metadata_dir) / f"{cert_uuid}.json"
+                if metadata_path.exists():
+                    metadata_path.unlink()
 
             return True
         except Exception:

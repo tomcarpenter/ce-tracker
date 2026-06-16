@@ -12,7 +12,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.compliance import ComplianceTracker
 from utils.hashing import compute_bytes_hash
-from utils.file_manager import CertificateManager
 from utils.navigation import render_sidebar_nav
 from utils.app_config import configured_storage
 
@@ -92,10 +91,7 @@ with st.form("ce_submission_form"):
             # Handle certificate upload if provided
             if certificate_file:
                 try:
-                    cert_mgr = CertificateManager(
-                        root_dir=Path("certificates/root"),
-                        backup_dir=Path("certificates/backup")
-                    )
+                    cert_mgr = storage.certificate_manager()
                     
                     file_data = certificate_file.read()
                     file_hash = compute_bytes_hash(file_data)
@@ -108,7 +104,7 @@ with st.form("ce_submission_form"):
                     )
                     
                     if cert_uuid:
-                        cert_path = f"certificates/root/{cert_uuid}{Path(certificate_file.name).suffix}"
+                        cert_path = str(storage.certificate_root_dir / f"{cert_uuid}{Path(certificate_file.name).suffix}")
                         cert_hash = file_hash
                     else:
                         st.warning("Certificate upload failed, continuing without it")

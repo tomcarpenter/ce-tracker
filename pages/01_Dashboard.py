@@ -240,6 +240,8 @@ else:
 pmhc_zip, pmhc_record_count, pmhc_file_count = build_ce_zip(
     pmhc_export_records,
     folder_per_record=True,
+    certificate_root_dir=storage.certificate_root_dir,
+    metadata_dir=storage.certificate_metadata_dir,
 )
 st.download_button(
     "Download PMH-C ZIP Packet",

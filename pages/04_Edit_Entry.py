@@ -13,7 +13,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.compliance import ComplianceTracker
 from utils.navigation import render_sidebar_nav
-from utils.file_manager import CertificateManager
 from utils.hashing import compute_bytes_hash
 from utils.app_config import configured_storage
 
@@ -35,18 +34,7 @@ CATEGORY_OPTIONS = [
 
 def certificate_file_path(certificate_path: str) -> Path | None:
     """Resolve a stored certificate path to a readable local file."""
-    if not certificate_path:
-        return None
-
-    path = Path(certificate_path)
-    if path.exists():
-        return path
-
-    fallback = Path("certificates/root") / path.name
-    if fallback.exists():
-        return fallback
-
-    return None
+    return storage.resolve_certificate_path(certificate_path)
 
 
 def render_certificate_preview(path: Path) -> None:
@@ -216,10 +204,7 @@ else:
                 entry["notes"] = notes
                 entry["updated_at"] = datetime.now().isoformat()
 
-                cert_mgr = CertificateManager(
-                    root_dir=Path("certificates/root"),
-                    backup_dir=Path("certificates/backup"),
-                )
+                cert_mgr = storage.certificate_manager()
 
                 if replacement_certificate:
                     file_data = replacement_certificate.read()
@@ -234,7 +219,7 @@ else:
                     if cert_uuid:
                         cert_mgr.delete_certificate_by_path(entry.get("certificate_path", ""))
                         entry["certificate_path"] = (
-                            f"certificates/root/{cert_uuid}{Path(replacement_certificate.name).suffix}"
+                            str(storage.certificate_root_dir / f"{cert_uuid}{Path(replacement_certificate.name).suffix}")
                         )
                         entry["certificate_hash"] = file_hash
                     else:
@@ -255,10 +240,7 @@ else:
             
             if deleted:
                 # Delete entry
-                CertificateManager(
-                    root_dir=Path("certificates/root"),
-                    backup_dir=Path("certificates/backup"),
-                ).delete_certificate_by_path(entry.get("certificate_path", ""))
+                storage.certificate_manager().delete_certificate_by_path(entry.get("certificate_path", ""))
                 success = storage.delete_record(entry["id"])
                 
                 if success:

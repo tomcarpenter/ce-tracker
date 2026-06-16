@@ -241,7 +241,7 @@ st.subheader("Backup Status")
 ce_data = storage.load_parquet()
 backup_status = storage.backup_status()
 
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5 = st.columns(5)
 
 with col1:
     st.metric("Local Records", len(ce_data))
@@ -254,6 +254,12 @@ with col3:
 
 with col4:
     st.metric("Settings Backup", "Yes" if backup_status["settings_backed_up"] else "No")
+
+with col5:
+    st.metric(
+        "Certificates",
+        f"{backup_status['backup_certificates']}/{backup_status['certificates']}",
+    )
 
 st.markdown("---")
 
