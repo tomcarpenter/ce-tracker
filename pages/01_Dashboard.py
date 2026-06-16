@@ -157,7 +157,7 @@ st.markdown("---")
 st.subheader("📋 Recent CE Entries")
 if not ce_data.empty:
     st.dataframe(
-        ce_data[["date", "title", "category", "hours"]].tail(10),
+        ce_data[["date", "title", "trainer_name", "organization", "category", "hours"]].tail(10),
         use_container_width=True,
         hide_index=True
     )

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from utils.ce_export import build_ce_zip, ce_basename, has_attachment
+from utils.ce_export import build_ce_zip, ce_basename, has_attachment, record_details_text
 
 
 class CeExportTests(unittest.TestCase):
@@ -45,6 +45,23 @@ class CeExportTests(unittest.TestCase):
                 "ce_2026-01-02_PMH-C_Course_Basics.txt"
             ],
         )
+
+    def test_record_details_include_trainer_and_organization(self):
+        details = record_details_text(
+            pd.Series(
+                {
+                    "date": "2026-01-02",
+                    "title": "PMH-C Course / Basics",
+                    "trainer_name": "Alex Morgan",
+                    "organization": "Clinical Training Center",
+                    "hours": 2,
+                    "category": "PMH-C",
+                }
+            )
+        )
+
+        self.assertIn("Trainer name: Alex Morgan", details)
+        self.assertIn("Organization: Clinical Training Center", details)
 
     def test_zip_includes_certificate_file_when_present(self):
         with tempfile.TemporaryDirectory() as tmpdir:

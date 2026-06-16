@@ -145,6 +145,15 @@ else:
                     value=float(entry.get("hours", 0))
                 )
 
+            trainer_name = st.text_input(
+                "Trainer Name",
+                value=entry.get("trainer_name", ""),
+            )
+            organization = st.text_input(
+                "Organization",
+                value=entry.get("organization", ""),
+            )
+
             st.markdown("---")
             st.subheader("Compliance Categories")
             selected_categories = {}
@@ -200,6 +209,8 @@ else:
                 # Update entry
                 entry["date"] = date
                 entry["title"] = title
+                entry["trainer_name"] = trainer_name
+                entry["organization"] = organization
                 entry.update({flag: int(selected) for flag, selected in selected_categories.items()})
                 entry["hours"] = hours
                 entry["notes"] = notes

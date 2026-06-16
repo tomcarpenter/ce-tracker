@@ -226,6 +226,8 @@ class Storage:
             "id",
             "date",
             "title",
+            "trainer_name",
+            "organization",
             *CATEGORY_FLAG_COLUMNS,
             "category",
             "hours",
@@ -257,6 +259,9 @@ class Storage:
         for flag in CATEGORY_FLAG_COLUMNS:
             normalized[flag] = cls._flag_value(normalized.get(flag, 0))
 
+        normalized["trainer_name"] = cls._text_value(normalized.get("trainer_name", ""))
+        normalized["organization"] = cls._text_value(normalized.get("organization", ""))
+
         normalized["category"] = ", ".join(
             label for flag, label in CATEGORY_LABELS.items() if normalized.get(flag, 0)
         )
@@ -287,6 +292,13 @@ class Storage:
             return 1 if value.strip().lower() in {"1", "true", "yes", "y"} else 0
 
         return int(bool(value))
+
+    @staticmethod
+    def _text_value(value: Any) -> str:
+        if pd.isna(value):
+            return ""
+
+        return str(value)
 
     def _configured_backup_dir(self) -> Path:
         if self.settings_path.exists():
