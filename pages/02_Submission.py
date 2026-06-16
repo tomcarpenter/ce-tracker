@@ -42,6 +42,9 @@ with st.form("ce_submission_form"):
     with col2:
         hours = st.number_input("CE Hours", min_value=0.0, max_value=40.0, step=0.5)
 
+    trainer_name = st.text_input("Trainer Name")
+    organization = st.text_input("Organization")
+
     st.markdown("---")
     st.subheader("Compliance Categories")
     selected_categories = {}
@@ -117,6 +120,8 @@ with st.form("ce_submission_form"):
                 "id": record_id,
                 "date": date,
                 "title": title,
+                "trainer_name": trainer_name,
+                "organization": organization,
                 **{flag: int(selected) for flag, selected in selected_categories.items()},
                 "hours": hours,
                 "notes": notes,

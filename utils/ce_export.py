@@ -81,6 +81,8 @@ def record_details_text(record: pd.Series) -> str:
         "",
         f"Date completed: {completed}",
         f"Course/training title: {record.get('title', '')}",
+        f"Trainer name: {record.get('trainer_name', '')}",
+        f"Organization: {record.get('organization', '')}",
         f"CE hours: {record.get('hours', '')}",
         f"Categories: {record.get('category', '')}",
         f"Notes: {record.get('notes', '')}",

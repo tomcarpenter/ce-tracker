@@ -133,6 +133,22 @@ class StorageBackupTests(unittest.TestCase):
         self.assertEqual(normalized["is_lmhc_general"], 1)
         self.assertEqual(normalized["is_pmhc"], 1)
         self.assertEqual(normalized["category"], "LMHC General, PMH-C")
+        self.assertEqual(normalized["trainer_name"], "")
+        self.assertEqual(normalized["organization"], "")
+
+    def test_record_normalization_preserves_trainer_and_organization(self):
+        normalized = Storage._normalize_record(
+            {
+                "id": "1",
+                "title": "Course",
+                "trainer_name": "Alex Morgan",
+                "organization": "Clinical Training Center",
+                "is_pmhc": 1,
+            }
+        )
+
+        self.assertEqual(normalized["trainer_name"], "Alex Morgan")
+        self.assertEqual(normalized["organization"], "Clinical Training Center")
 
 
 if __name__ == "__main__":

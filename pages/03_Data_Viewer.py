@@ -71,7 +71,7 @@ else:
         )
     
     with col3:
-        search_text = st.text_input("Search title", placeholder="Type to filter...")
+        search_text = st.text_input("Search records", placeholder="Search title, trainer, or organization...")
     
     # Apply filters
     filtered = ce_data.copy()
@@ -94,21 +94,51 @@ else:
         filtered = filtered[(filtered["date"] >= date_min) & (filtered["date"] < date_max)]
     
     if search_text:
-        filtered = filtered[filtered["title"].str.contains(search_text, case=False, na=False)]
+        search_columns = ["title", "trainer_name", "organization"]
+        matches_search = pd.Series(False, index=filtered.index)
+        for column in search_columns:
+            if column in filtered.columns:
+                matches_search = matches_search | filtered[column].str.contains(
+                    search_text,
+                    case=False,
+                    na=False,
+                )
+        filtered = filtered[matches_search]
     
     # Display table
     st.markdown("---")
     st.subheader(f"Records: {len(filtered)}")
     
     if not filtered.empty:
-        display_df = filtered[["id", "date", "title", "category", "hours", "certificate_path"]].copy()
+        display_df = filtered[
+            [
+                "id",
+                "date",
+                "title",
+                "trainer_name",
+                "organization",
+                "category",
+                "hours",
+                "certificate_path",
+            ]
+        ].copy()
         display_df["date"] = pd.to_datetime(display_df["date"]).dt.strftime("%Y-%m-%d")
         display_df["has_attachments"] = display_df["certificate_path"].apply(
             lambda value: "✅" if has_attachment(value) else "❌"
         )
         display_df["file_names"] = display_df["certificate_path"].apply(attachment_filename)
         display_df = display_df[
-            ["id", "date", "title", "category", "hours", "has_attachments", "file_names"]
+            [
+                "id",
+                "date",
+                "title",
+                "trainer_name",
+                "organization",
+                "category",
+                "hours",
+                "has_attachments",
+                "file_names",
+            ]
         ]
 
         selection = st.dataframe(
@@ -121,6 +151,8 @@ else:
                 "id": None,
                 "date": "Date",
                 "title": "Title",
+                "trainer_name": "Trainer",
+                "organization": "Organization",
                 "category": "Categories",
                 "hours": "Hours",
                 "has_attachments": st.column_config.TextColumn(
