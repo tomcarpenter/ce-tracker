@@ -24,7 +24,7 @@ def ce_basename(record: pd.Series) -> str:
     return f"ce_{date_part}_{title_part}"
 
 
-def certificate_path(record: pd.Series) -> Path | None:
+def certificate_path(record: pd.Series, certificate_root_dir: Path | None = None) -> Path | None:
     """Resolve the stored certificate path for a CE record."""
     stored_path = record.get("certificate_path", "")
     if not stored_path:
@@ -34,22 +34,23 @@ def certificate_path(record: pd.Series) -> Path | None:
     if path.exists():
         return path
 
-    fallback = Path("certificates/root") / path.name
-    if fallback.exists():
-        return fallback
+    if certificate_root_dir:
+        fallback = Path(certificate_root_dir) / path.name
+        if fallback.exists():
+            return fallback
 
     return None
 
 
-def attachment_filename(certificate_path_value: str) -> str:
+def attachment_filename(certificate_path_value: str, metadata_dir: Path | None = None) -> str:
     """Return the original uploaded filename when metadata is available."""
     if not certificate_path_value:
         return ""
 
     path = Path(certificate_path_value)
-    metadata_path = Path("certificates/metadata") / f"{path.stem}.json"
+    metadata_path = Path(metadata_dir) / f"{path.stem}.json" if metadata_dir else None
 
-    if metadata_path.exists():
+    if metadata_path and metadata_path.exists():
         try:
             with open(metadata_path, "r") as f:
                 metadata = json.load(f)
@@ -60,21 +61,31 @@ def attachment_filename(certificate_path_value: str) -> str:
     return path.name
 
 
-def has_attachment(certificate_path_value: str) -> bool:
+def has_attachment(certificate_path_value: str, certificate_root_dir: Path | None = None) -> bool:
     """Check whether a record points to an existing attachment file."""
     if not certificate_path_value:
         return False
 
     path = Path(certificate_path_value)
-    return path.exists() or (Path("certificates/root") / path.name).exists()
+    if path.exists():
+        return True
+
+    if certificate_root_dir:
+        return (Path(certificate_root_dir) / path.name).exists()
+
+    return False
 
 
-def record_details_text(record: pd.Series) -> str:
+def record_details_text(
+    record: pd.Series,
+    certificate_root_dir: Path | None = None,
+    metadata_dir: Path | None = None,
+) -> str:
     """Create a text details sheet for a CE record."""
     date_value = pd.to_datetime(record.get("date", ""), errors="coerce")
     completed = date_value.strftime("%Y-%m-%d") if not pd.isna(date_value) else ""
-    certificate = certificate_path(record)
-    original_filename = attachment_filename(record.get("certificate_path", ""))
+    certificate = certificate_path(record, certificate_root_dir)
+    original_filename = attachment_filename(record.get("certificate_path", ""), metadata_dir)
 
     lines = [
         "CE Submission Details",
@@ -100,7 +111,12 @@ def record_details_text(record: pd.Series) -> str:
     return "\n".join(lines).strip() + "\n"
 
 
-def build_ce_zip(records: pd.DataFrame, folder_per_record: bool = False) -> tuple[bytes, int, int]:
+def build_ce_zip(
+    records: pd.DataFrame,
+    folder_per_record: bool = False,
+    certificate_root_dir: Path | None = None,
+    metadata_dir: Path | None = None,
+) -> tuple[bytes, int, int]:
     """
     Build a ZIP with CE detail sheets and attached certificate files.
 
@@ -118,10 +134,17 @@ def build_ce_zip(records: pd.DataFrame, folder_per_record: bool = False) -> tupl
             folder = f"{base}/" if folder_per_record else ""
 
             txt_name = _unique_name(f"{folder}{base}.txt", used_names)
-            zip_file.writestr(txt_name, record_details_text(record))
+            zip_file.writestr(
+                txt_name,
+                record_details_text(
+                    record,
+                    certificate_root_dir=certificate_root_dir,
+                    metadata_dir=metadata_dir,
+                ),
+            )
             record_count += 1
 
-            cert_path = certificate_path(record)
+            cert_path = certificate_path(record, certificate_root_dir)
             if cert_path:
                 cert_name = _unique_name(f"{folder}{base}{cert_path.suffix}", used_names)
                 zip_file.write(cert_path, cert_name)
@@ -130,7 +153,12 @@ def build_ce_zip(records: pd.DataFrame, folder_per_record: bool = False) -> tupl
     return buffer.getvalue(), record_count, file_count
 
 
-def write_ce_folders(records: pd.DataFrame, destination_dir: Path) -> tuple[int, int]:
+def write_ce_folders(
+    records: pd.DataFrame,
+    destination_dir: Path,
+    certificate_root_dir: Path | None = None,
+    metadata_dir: Path | None = None,
+) -> tuple[int, int]:
     """
     Write one folder per CE record with details text and certificate file.
 
@@ -146,10 +174,17 @@ def write_ce_folders(records: pd.DataFrame, destination_dir: Path) -> tuple[int,
         record_dir = destination_dir / base
         record_dir.mkdir(parents=True, exist_ok=True)
 
-        (record_dir / f"{base}.txt").write_text(record_details_text(record), encoding="utf-8")
+        (record_dir / f"{base}.txt").write_text(
+            record_details_text(
+                record,
+                certificate_root_dir=certificate_root_dir,
+                metadata_dir=metadata_dir,
+            ),
+            encoding="utf-8",
+        )
         record_count += 1
 
-        cert_path = certificate_path(record)
+        cert_path = certificate_path(record, certificate_root_dir)
         if cert_path:
             shutil.copy2(cert_path, record_dir / f"{base}{cert_path.suffix}")
             file_count += 1

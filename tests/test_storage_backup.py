@@ -85,6 +85,30 @@ class StorageBackupTests(unittest.TestCase):
                 ).exists()
             )
 
+    def test_certificate_manager_uses_selected_data_and_backup_dirs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            storage = Storage(data_dir=str(root / "data"), backup_dir=str(root / "backup"))
+            cert_mgr = storage.certificate_manager()
+
+            cert_uuid = cert_mgr.store_certificate(
+                file_data=b"certificate",
+                original_filename="course.pdf",
+                file_hash="hash",
+                record_id="1",
+            )
+
+            stored_name = f"{cert_uuid}.pdf"
+            self.assertTrue((root / "data" / "certificates" / "root" / stored_name).exists())
+            self.assertTrue((root / "data" / "certificates" / "metadata" / f"{cert_uuid}.json").exists())
+            self.assertTrue((root / "backup" / "certificates" / "root" / stored_name).exists())
+            self.assertTrue((root / "backup" / "certificates" / "metadata" / f"{cert_uuid}.json").exists())
+
+            self.assertEqual(
+                storage.resolve_certificate_path(stored_name),
+                root / "data" / "certificates" / "root" / stored_name,
+            )
+
     def test_write_update_and_delete_keep_backup_current(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)

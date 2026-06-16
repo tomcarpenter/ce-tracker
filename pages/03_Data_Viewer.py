@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from utils.navigation import render_sidebar_nav
 from utils.storage import CATEGORY_LABELS
-from utils.ce_export import attachment_filename, build_ce_zip, certificate_path, has_attachment
+from utils.ce_export import build_ce_zip
 from utils.app_config import configured_storage
 
 
@@ -124,9 +124,9 @@ else:
         ].copy()
         display_df["date"] = pd.to_datetime(display_df["date"]).dt.strftime("%Y-%m-%d")
         display_df["has_attachments"] = display_df["certificate_path"].apply(
-            lambda value: "✅" if has_attachment(value) else "❌"
+            lambda value: "✅" if storage.has_attachment(value) else "❌"
         )
-        display_df["file_names"] = display_df["certificate_path"].apply(attachment_filename)
+        display_df["file_names"] = display_df["certificate_path"].apply(storage.attachment_filename)
         display_df = display_df[
             [
                 "id",
@@ -204,7 +204,7 @@ else:
 
     if len(selected_records) == 1:
         selected_record = selected_records.iloc[0]
-        selected_file = certificate_path(selected_record)
+        selected_file = storage.resolve_certificate_path(selected_record.get("certificate_path", ""))
 
         with st.expander("View Current File", expanded=False):
             if selected_file:
@@ -239,7 +239,15 @@ else:
             st.rerun()
 
     with col3:
-        zip_data, record_count, file_count = build_ce_zip(selected_records) if selected_ids else (b"", 0, 0)
+        zip_data, record_count, file_count = (
+            build_ce_zip(
+                selected_records,
+                certificate_root_dir=storage.certificate_root_dir,
+                metadata_dir=storage.certificate_metadata_dir,
+            )
+            if selected_ids
+            else (b"", 0, 0)
+        )
         st.download_button(
             "📎 Download CE Packet",
             data=zip_data,
