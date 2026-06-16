@@ -39,10 +39,12 @@ class Storage:
         self.data_dir = Path(data_dir)
         self.parquet_path = self.data_dir / "ce_records.parquet"
         self.audit_log_path = self.data_dir / "audit_log.csv"
+        self.settings_path = self.data_dir / "settings.json"
         self.backup_dir = Path(backup_dir) if backup_dir else self._configured_backup_dir()
         self.backup_parquet_path = self.backup_dir / "ce_records.parquet"
         self.backup_csv_path = self.backup_dir / "ce_records.csv"
         self.backup_audit_log_path = self.backup_dir / "audit_log.csv"
+        self.backup_settings_path = self.backup_dir / "settings.json"
         self.backup_events_dir = self.backup_dir / "events"
         self.initialized = False
         
@@ -182,6 +184,8 @@ class Storage:
                 write_ce_folders(backup_records, self.backup_events_dir)
             if self.audit_log_path.exists():
                 shutil.copy2(self.audit_log_path, self.backup_audit_log_path)
+            if self.settings_path.exists():
+                shutil.copy2(self.settings_path, self.backup_settings_path)
             return True
         except Exception:
             return False
@@ -196,6 +200,7 @@ class Storage:
             "local_rows": local_rows,
             "backup_rows": backup_rows,
             "event_folders": len(list(self.backup_events_dir.iterdir())) if self.backup_events_dir.exists() else 0,
+            "settings_backed_up": self.backup_settings_path.exists(),
             "in_sync": self.backup_parquet_path.exists() and local_rows == backup_rows,
         }
 
@@ -284,10 +289,9 @@ class Storage:
         return int(bool(value))
 
     def _configured_backup_dir(self) -> Path:
-        settings_file = self.data_dir / "settings.json"
-        if settings_file.exists():
+        if self.settings_path.exists():
             try:
-                with open(settings_file, "r") as f:
+                with open(self.settings_path, "r") as f:
                     settings = json.load(f)
                 configured_path = settings.get("data_backup_path") or settings.get("csv_backup_path")
                 if configured_path:

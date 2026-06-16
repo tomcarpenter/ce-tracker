@@ -26,8 +26,10 @@ The app will open automatically at `http://localhost:8501`
 ## Architecture
 
 **Data Model:**
-- **Parquet** (`data/ce_records.parquet`) = Source of truth
-- **Backup Folder** (`backup_data/` by default) = `ce_records.parquet` plus per-event folders
+- **App Pointer** (`app_config.json`, local/ignored) = Selected data folder path
+- **Parquet** (`ce_records.parquet` inside the selected data folder) = Source of truth
+- **Settings** (`settings.json` inside the selected data folder) = Compliance settings plus selected backup folder path
+- **Backup Folder** (`backup_data/` by default, user-selectable) = `ce_records.parquet`, `settings.json`, audit log, and per-event folders
 - **Certificates** = UUID-named local storage with SHA256 hashing
 - **Audit Log** = Append-only change tracking
 
@@ -122,9 +124,11 @@ Visit Settings page to configure:
 - Required CE credits for LMHC General, Ethics, Roles, Suicide Prevention, Equity, and PMH-C
 
 ### Backup Configuration
-- Choose a data backup folder with the Settings folder picker
+- Choose a data folder and a data backup folder with the Settings folder pickers
+- The repo-local `app_config.json` points the app at the selected data folder
+- The selected data folder contains `settings.json`, which points to the selected backup folder
 - App automatically updates the backup after submissions, edits, and deletes
-- Backup contains a parent Parquet file and an `events/` folder with one subfolder per CE event
+- Backup contains `ce_records.parquet`, `settings.json`, the audit log, and an `events/` folder with one subfolder per CE event
 
 ### PMH-C Submissions
 Get helper text and form link on Dashboard page:

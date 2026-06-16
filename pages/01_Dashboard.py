@@ -12,16 +12,16 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from utils.storage import Storage
 from utils.compliance import ComplianceTracker
 from utils.navigation import render_sidebar_nav
 from utils.ce_export import build_ce_zip
+from utils.app_config import configured_storage
 
 render_sidebar_nav("Dashboard")
 st.title("📊 CE Tracking Dashboard")
 
 # Initialize
-storage = st.session_state.get("storage") or Storage()
+storage = st.session_state.get("storage") or configured_storage()
 
 # Ensure data initialized
 storage.initialize()
@@ -32,7 +32,7 @@ ce_data = storage.load_parquet()
 st.markdown("---")
 
 def load_settings():
-    settings_file = Path("data/settings.json")
+    settings_file = storage.settings_path
     defaults = {
         "lmhc_start": "2023-01-01",
         "suicide_start": "2020-01-01",
