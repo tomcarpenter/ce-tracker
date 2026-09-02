@@ -35,7 +35,7 @@ with st.form("ce_submission_form"):
     col1, col2 = st.columns(2)
     
     with col1:
-        date = st.date_input("Date Completed")
+        date = st.date_input("Date Completed", value=None)
         title = st.text_input("Course/Training Title")
     
     with col2:
